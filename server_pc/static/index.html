@@ -58,6 +58,23 @@
       </div>
     </header>
 
+    <!-- BARRA DE CONFIGURACIÓN DE VOZ Y MODELO LOCAL -->
+    <div class="assistant-meta-bar">
+      <div class="model-pill" id="modelStatusPill">
+        <span class="pill-dot" id="ollamaDot"></span>
+        <span id="modelStatusText">Ollama (Qwen 2.5)...</span>
+      </div>
+
+      <div class="voice-picker">
+        <label for="voiceSelect">Voz:</label>
+        <select id="voiceSelect">
+          <option value="jorge" selected>Jorge (Loquendo 🇪🇸)</option>
+          <option value="carlos">Carlos (Loquendo 🇲🇽)</option>
+          <option value="carmen">Carmen (Loquendo 🇪🇸)</option>
+        </select>
+      </div>
+    </div>
+
     <!-- CARA ANIMATRÓNICA VIRTUAL (SIMULADOR EN TIEMPO REAL) -->
     <main class="robot-face-stage">
       <div class="audio-ripple-container" id="rippleContainer">
@@ -86,10 +103,22 @@
         </div>
       </div>
 
+      <!-- VISUALIZADOR DE ONDAS DE VOZ -->
+      <div class="waveform-box" id="waveformBox">
+        <canvas id="waveformCanvas"></canvas>
+      </div>
+
       <!-- TEXTO DE ESTADO / DIÁLOGO -->
       <div class="dialogue-box">
         <p class="status-caption" id="statusCaption">Toca el micrófono para hablar</p>
-        <p class="sub-caption" id="subCaption">Tu celular funcionará como el micrófono y la bocina del animatrónico</p>
+        <p class="sub-caption" id="subCaption">Tu celular funcionará como el micrófono y la bocina de Loquendo</p>
+        
+        <!-- BOTÓN DE REPRODUCCIÓN RÁPIDA -->
+        <div class="replay-audio-container" id="replayAudioContainer" style="display: none;">
+          <button class="btn-replay-loquendo" id="btnReplayAudio">
+            🔊 Escuchar respuesta de Loquendo
+          </button>
+        </div>
       </div>
     </main>
 
@@ -100,7 +129,7 @@
         <button class="chip" data-prompt="Enciende la luz del laboratorio">💡 Enciende la luz</button>
         <button class="chip" data-prompt="Apaga la luz del laboratorio">🌑 Apaga la luz</button>
         <button class="chip" data-prompt="¿Quién eres y qué puedes hacer?">🤖 ¿Quién eres?</button>
-        <button class="chip" data-prompt="Cuéntame un chiste robótico">🎭 Cuéntame un chiste</button>
+        <button class="chip" data-prompt="Cuéntame un chiste robótico al estilo Loquendo">🎭 Cuéntame un chiste</button>
       </div>
     </div>
 
@@ -117,7 +146,7 @@
 
       <!-- ENTRADA DE TEXTO ALTERNATIVA -->
       <div class="text-input-bar">
-        <input type="text" id="inputQuery" placeholder="O escribe tu pregunta aquí..." autocomplete="off">
+        <input type="text" id="inputQuery" placeholder="O escribe tu mensaje aquí..." autocomplete="off">
         <button id="btnSendText" aria-label="Enviar texto">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -164,4 +193,3 @@
 </body>
 
 </html>
-

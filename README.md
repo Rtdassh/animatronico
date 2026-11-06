@@ -1,32 +1,34 @@
 # 🤖 Sistema Animatrónico Inteligente con Procesamiento Local y Visión Ambiental
 
-Sistema robótico interactivo de 4 niveles que desacopla el procesamiento de Inteligencia Artificial (LLM local y síntesis de voz), la pasarela de red inalámbrica y el control físico en tiempo real determinista.
+Sistema robótico interactivo de 4 niveles que desacopla el procesamiento de Inteligencia Artificial (LLM local y síntesis de voz Loquendo), la pasarela de red inalámbrica y el control físico en tiempo real determinista.
 
 ---
 
 ## 🏛️ Arquitectura del Sistema
 
 ```text
- ┌─────────────────┐       Wi-Fi       ┌────────────────────────┐
- │ 1. SMARTPHONE   │ <---------------> │ 2. PC LOCAL            │
- │ • Micrófono web │                   │ • Ollama (Qwen 2.5 1B) │
- │ • Altavoz audio │                   │ • edge-tts             │
- │ • Web Audio API │                   │ • FastAPI / WebSockets │
- └─────────────────┘                   └────────────────────────┘
-                                                    │
-                                           WebSocket / Wi-Fi
-                                                    │
-                                                    v
- ┌─────────────────┐    Hardware UART  ┌────────────────────────┐
- │ 4. ARDUINO UNO  │ <---------------- │ 3. ESP32 DEVKIT V1     │
- │ • 3x SG90 PWM   │ (9600 bps / 3.3V) │ • Pasarela WebSocket   │
- │ • Bus I2C LM75A │                   │ • Hardware UART2       │
- │ • Sensor DHT11  │                   │ • Cero latencia        │
- └─────────────────┘                   └────────────────────────┘
+ ┌──────────────────────┐    Wi-Fi / HTTPS   ┌───────────────────────────────┐
+ │ 1. SMARTPHONE        │ <----------------> │ 2. PC LOCAL                   │
+ │ • Micrófono Web Audio│                    │ • Ollama (Qwen 2.5:7b Local)  │
+ │ • Altavoz de voz     │                    │ • Loquendo TTS (Jorge/Carlos) │
+ │ • Web Audio Lip-Sync │                    │ • STT Motor SpeechRecognition │
+ └──────────────────────┘                    │ • Túnel Cloudflare HTTPS      │
+                                             │ • FastAPI / WebSockets        │
+                                             └───────────────────────────────┘
+                                                             │
+                                                    WebSocket / Wi-Fi
+                                                             │
+                                                             v
+ ┌──────────────────────┐    Hardware UART   ┌───────────────────────────────┐
+ │ 4. ARDUINO UNO       │ <----------------- │ 3. ESP32 DEVKIT V1            │
+ │ • 3x SG90 PWM        │ (9600 bps / 3.3V)  │ • Pasarela WebSocket          │
+ │ • Bus I2C LM75A      │                    │ • Hardware UART2              │
+ │ • Sensor DHT11       │                    │ • Cero latencia               │
+ └──────────────────────┘                    └───────────────────────────────┘
 ```
 
-1. **Smartphone (Micrófono & Altavoz Inalámbrico):** Interfaz web táctil con reconocimiento de voz nativo (Web Speech API) y reproducción de audio por el altavoz del teléfono. Su analizador espectral (Web Audio API) calcula la envolvente fonética para una modulación labial (*Lip-Sync*) con cero desfase.
-2. **PC Local (Cerebro Central):** Servidor asíncrono en Python con FastAPI. Conecta con el modelo local **Qwen 2.5 (1.5B)** vía Ollama, sintetiza la voz en español con **edge-tts** y administra la telemetría ambiental.
+1. **Smartphone (Micrófono & Altavoz Inalámbrico):** Interfaz web táctil con grabación directa en PCM WAV (16kHz), analizador espectral (Web Audio API) y reproducción de audio por el altavoz del teléfono. Calcula la envolvente fonética para una modulación labial (*Lip-Sync*) con cero desfase y control de servos físico en tiempo real.
+2. **PC Local (Cerebro Central):** Servidor asíncrono en Python con FastAPI. Conecta con el modelo local **Qwen 2.5 (7B)** vía Ollama, sintetiza la legendaria voz de **Loquendo** (Jorge, Carlos, Carmen) con caché en disco y administra la telemetría ambiental.
 3. **ESP32 DevKit V1 (Pasarela Inalámbrica):** Cliente WebSocket de alta velocidad conectado a la PC. Reenvía instrucciones de movimiento por `Serial2` al Arduino Uno en menos de $2\text{ ms}$.
 4. **Arduino Uno R3 (Controlador de Tiempo Real):** Módulo esclavo libre de interrupciones Wi-Fi que ejecuta un bucle determinista con `millis()`. Acciona los 3 servos SG90 (ojos, párpados, mandíbula) sin temblores (*jitter*), genera parpadeo autónomo y reporta telemetría periódica del sensor I2C **LM75A** y sensor de humedad **DHT11**.
 
@@ -50,17 +52,25 @@ animatronico/
 │       └── esp32_puente_websocket.ino    # Firmware ESP32 (Cliente WebSocket <-> UART2)
 │
 ├── server_pc/                             # Servidor local y aplicación móvil táctil
-│   ├── app.py                            # Servidor FastAPI + WebSockets + Ollama + TTS
-│   ├── run_server.py                     # Lanzador con código QR en consola para teléfonos
+│   ├── app.py                            # Servidor FastAPI + WebSockets + Ollama + Loquendo TTS
+│   ├── run_server.py                     # Lanzador con túnel Cloudflare HTTPS y QR en consola
+│   ├── start.py                          # Alias de conveniencia para run_server.py
+│   ├── start.bat                         # Lanzador por lotes para Windows
+│   ├── ollama_client.py                  # Cliente de inferencia Qwen 2.5 local con telemetría
+│   ├── tts_loquendo.py                   # Motor Loquendo (Jorge, Carlos, Carmen) con caché MD5
+│   ├── stt_engine.py                     # Reconocimiento de voz a texto (WAV 16kHz)
 │   ├── requirements.txt                  # Dependencias de Python
+│   ├── bin/                              # Binarios de soporte (cloudflared.exe para HTTPS móvil)
+│   ├── audio/                            # Almacén en caché de audios sintetizados
 │   └── static/                           # Aplicación Web Móvil (HTML5 / CSS / JS)
-│       ├── index.html                    # Interfaz táctil con simulador facial en vivo
+│       ├── index.html                    # Interfaz táctil con simulador facial en vivo y visualizador
 │       ├── style.css                     # Estilos oscuros responsivos
 │       └── app.js                        # Control de audio, micrófono y Lip-Sync
 │
 ├── tools/                                 # Scripts de utilidad
 │   └── render_plano_circuito.py          # Generador programático del plano esquemático
 │
+├── start.bat                              # Lanzador de un clic para Windows
 ├── .gitignore                             # Reglas de exclusión de archivos
 └── README.md                              # Documentación principal del proyecto
 ```
@@ -99,20 +109,25 @@ animatronico/
 
 ## 🚀 Guía de Puesta en Marcha
 
-### 1. Carga de Firmwares
-1. **Arduino Uno:** Abre `firmware/arduino_uno/arduino_uno_animatronico.ino` en el Arduino IDE e instálalo en la placa.
-2. **ESP32 DevKit:** Abre `firmware/esp32_devkit/esp32_puente_websocket.ino`, configura las credenciales de tu red Wi-Fi y la dirección IP de tu computadora, y súbelo a la placa.
+### 1. Iniciar el Modelo Local con Ollama
+Asegúrate de tener **Ollama** ejecutándose en tu PC con el modelo **`qwen2.5:7b`**:
+```bash
+ollama run qwen2.5:7b
+```
 
-### 2. Iniciar el Servidor y la Aplicación Móvil
-1. Instala las dependencias de Python en tu PC:
-   ```bash
-   cd server_pc
-   pip install -r requirements.txt
-   ```
-2. Ejecuta el servidor:
-   ```bash
-   python run_server.py
-   ```
-3. En la consola verás la URL local y un **código QR**:
-   * Abre la cámara de tu celular y escanea el código QR (o entra a `http://<IP_PC>:8000`).
-4. Toca el botón del micrófono en el celular para hablar con el animatrónico. La respuesta se escuchará por la bocina del teléfono mientras la mandíbula física se mueve al compás de la voz.
+### 2. Iniciar el Servidor Central
+Ejecuta el archivo **`start.bat`** en la raíz del proyecto (o desde la consola):
+```bash
+.\start.bat
+```
+El servidor automáticamente:
+- Verificará la conexión con Ollama.
+- Iniciará el servidor FastAPI en el puerto 8000.
+- Creará un túnel seguro **Cloudflare HTTPS** (`https://*.trycloudflare.com`).
+- Generará un **código QR en la terminal**.
+
+### 3. Conectar el Celular
+1. Abre la cámara de tu celular y **escanea el código QR**.
+2. Al ingresar en Chrome o Safari móvil, concede permisos de micrófono.
+3. Elige la voz que prefieras: **Jorge (Loquendo 🇪🇸)**, **Carlos (Loquendo 🇲🇽)** o **Carmen (Loquendo 🇪🇸)**.
+4. Toca el botón del micrófono para hablar. La respuesta será generada por **Qwen 2.5 local**, leída por **Loquendo** y tu animatrónico moverá su mandíbula en tiempo real con cero retraso.

@@ -14,9 +14,19 @@ venv/
 env/
 ENV/
 
-# Archivos de audio generados dinámicamente
+# Archivos de audio generados dinámicamente y caché
 server_pc/audio/*.mp3
+server_pc/audio/*.wav
+server_pc/audio_cache/
 !server_pc/audio/.gitkeep
+
+# Binarios pesados
+server_pc/bin/*.exe
+
+# Exclusiones de privacidad
+*voicebox*
+*.voicebox*
+*.zip
 
 # Archivos temporales de sistema operativo y editores
 .DS_Store

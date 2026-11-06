@@ -1,35 +1,43 @@
 #!/usr/bin/env python3
 """
-Servidor Central de Inteligencia Artificial, Sincronización Labial y Enlace Móvil
+=============================================================================
+SERVIDOR CENTRAL DE INTELIGENCIA ARTIFICIAL, VOZ Y HARDWARE ANIMATRÓNICO
 Proyecto: Cabeza Animatrónica con IA Local
-Plataforma: PC Local (FastAPI + Ollama / Qwen 2.5 + edge-tts + WebSockets)
+Plataforma: PC Local (FastAPI + Ollama / Qwen 2.5 + Loquendo TTS + WebSockets)
+=============================================================================
 """
 
 import os
 import re
 import json
 import uuid
+import base64
 import asyncio
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
-import httpx
-import edge_tts
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, Response, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from ollama_client import query_qwen, clean_for_speech, check_ollama, get_best_model
+from tts_loquendo import generate_loquendo_speech, VOICES, AUDIO_DIR
+from stt_engine import transcribe_audio_bytes
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
-AUDIO_DIR = BASE_DIR / "audio"
-
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="Servidor Animatrónico Inteligente", version="1.0")
+app = FastAPI(
+    title="Cíclope AI · Servidor Animatrónico Inteligente",
+    description="Servidor local con Ollama (Qwen 2.5), Loquendo TTS y control cinemático ESP32/Arduino.",
+    version="2.0"
+)
 
+# Permitir CORS para conexiones desde la red local y túneles seguros HTTPS (Cloudflare)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,21 +52,23 @@ app.add_middleware(
 class SystemState:
     temperature: float = 23.5  # Lectura LM75A (°C)
     humidity: float = 55.0     # Lectura DHT11 (% RH)
-    light_state: int = 0       # 0: Apagada, 1: Encendida
+    light_state: int = 0       # 0: Apagada, 1: Encendida (Pin D7)
     mouth_angle: int = 90      # 90° cerrada a 130° abierta
     eyes_angle: int = 90       # 60° a 120°
     esp32_connected: bool = False
     mobile_connected: bool = False
-    esp32_socket: WebSocket = None
+    esp32_socket: Optional[WebSocket] = None
     mobile_sockets: List[WebSocket] = []
 
 state = SystemState()
 
 # -----------------------------------------------------------------------------
-# MODELOS DE DATOS
+# MODELOS DE DATOS PYDANTIC
 # -----------------------------------------------------------------------------
 class ChatRequest(BaseModel):
     text: str
+    voice: str = "jorge"
+    history: List[Dict[str, str]] = []
 
 class ControlRequest(BaseModel):
     mouth: int = 90
@@ -67,98 +77,55 @@ class ControlRequest(BaseModel):
     light: int = -1
 
 # -----------------------------------------------------------------------------
-# MOTOR DE INFERENCIA LLM (Ollama con fallback inteligente)
+# HELPERS DE CONTROL DE HARDWARE
 # -----------------------------------------------------------------------------
-async def query_llm(user_prompt: str) -> str:
-    """
-    Consulta a Ollama local (qwen2.5:1.5b).
-    Si Ollama no está en ejecución, responde mediante un motor heurístico local
-    para que la app y el animatrónico sigan funcionando al 100%.
-    """
-    clean_prompt = user_prompt.lower().strip()
+async def apply_hardware_tags(text: str) -> bool:
+    """Detecta etiquetas como [LUZ_ON], [LUZ_OFF], [BLINK] en la respuesta de la IA y actualiza hardware."""
+    changed = False
+    blink = 0
 
-    # Contexto del sistema inyectando telemetría real
-    system_prompt = (
-        "Eres 'Cíclope', una cabeza animatrónica con inteligencia artificial local e interactiva. "
-        "Tienes un microcontrolador ESP32 como pasarela y un Arduino Uno que controla tus 3 servomotores.\n"
-        f"- Estado actual de tus sensores: Temperatura ambiente (LM75A): {state.temperature:.1f} °C, Humedad (DHT11): {state.humidity:.1f} %.\n"
-        f"- Estado de la luz del laboratorio: {'ENCENDIDA' if state.light_state == 1 else 'APAGADA'}.\n"
-        "Reglas:\n"
-        "1. Responde SIEMPRE en español de forma carismática, concisa (máximo 2 a 3 oraciones).\n"
-        "2. Si el usuario te pide encender la luz, incluye la etiqueta [LUZ_ON] en tu respuesta.\n"
-        "3. Si el usuario te pide apagar la luz, incluye la etiqueta [LUZ_OFF] en tu respuesta.\n"
-    )
+    if "[LUZ_ON]" in text:
+        state.light_state = 1
+        changed = True
+    elif "[LUZ_OFF]" in text:
+        state.light_state = 0
+        changed = True
 
-    ollama_url = "http://localhost:11434/api/generate"
-    try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
-            resp = await client.post(
-                ollama_url,
-                json={
-                    "model": "qwen2.5:1.5b",
-                    "prompt": f"{system_prompt}\nUsuario: {user_prompt}\nCíclope:",
-                    "stream": False,
-                }
-            )
-            if resp.status_code == 200:
-                answer = resp.json().get("response", "").strip()
-                if answer:
-                    return answer
-    except Exception:
-        pass  # Ollama no está activo; activar motor de respaldo local
+    if "[BLINK]" in text:
+        blink = 1
 
-    # Fallback inteligente local
-    if any(w in clean_prompt for w in ["temperatura", "grados", "calor", "frio", "clima"]):
-        return (f"Según mi sensor digital LM75A, la temperatura actual en el laboratorio es de "
-                f"{state.temperature:.1f} grados Celsius, con una humedad del {state.humidity:.1f} por ciento.")
-    elif any(w in clean_prompt for w in ["humedad", "ambiente"]):
-        return (f"Mi sensor DHT11 reporta una humedad relativa del {state.humidity:.1f} por ciento, "
-                f"y la temperatura es de {state.temperature:.1f} grados.")
-    elif "enciende" in clean_prompt and "luz" in clean_prompt:
-        return "[LUZ_ON] ¡Entendido! He encendido la luz del laboratorio en el pin D7."
-    elif "apaga" in clean_prompt and "luz" in clean_prompt:
-        return "[LUZ_OFF] Listo, acabo de apagar la luz del laboratorio."
-    elif any(w in clean_prompt for w in ["quien eres", "qué eres", "que haces", "proyecto"]):
-        return ("Soy la cabeza animatrónica inteligente con IA local. Utilizo tu celular como micrófono y altavoz, "
-                "mientras mi Arduino y ESP32 controlan mis expresiones faciales y sensores.")
-    elif any(w in clean_prompt for w in ["chiste", "broma", "gracioso"]):
-        return ("¿Por qué los robots nunca tienen miedo? Porque tienen nervios de acero y corazón de silicio.")
-    elif any(w in clean_prompt for w in ["hola", "buenos dias", "buenas tardes", "hey"]):
-        return (f"¡Hola! Te escucho perfectamente por el micrófono del teléfono. Actualmente estamos a "
-                f"{state.temperature:.1f} grados. ¿En qué te ayudo?")
-    else:
-        return (f"He recibido tu mensaje: '{user_prompt}'. Mis sensores reportan {state.temperature:.1f} grados "
-                f"y mis 3 servomotores están calibrados y listos para actuar.")
+    if state.esp32_socket and (changed or blink == 1):
+        cmd = f"CMD:M={state.mouth_angle},E={state.eyes_angle},B={blink},L={state.light_state}\n"
+        try:
+            await state.esp32_socket.send_text(cmd)
+        except Exception:
+            pass
 
-# -----------------------------------------------------------------------------
-# MOTOR DE SÍNTESIS DE VOZ Y LIP-SYNC (edge-tts)
-# -----------------------------------------------------------------------------
-async def synthesize_speech(text: str) -> str:
-    """
-    Sintetiza la voz en español neutro de alta fidelidad con edge-tts
-    y guarda el archivo en formato MP3 para streaming móvil.
-    """
-    # Limpiar etiquetas de control antes de pronunciar
-    spoken_text = re.sub(r'\[LUZ_ON\]|\[LUZ_OFF\]', '', text).strip()
-    if not spoken_text:
-        spoken_text = "Comando ejecutado."
+    if changed:
+        await broadcast_to_mobile({
+            "type": "telemetry",
+            "temperature": state.temperature,
+            "humidity": state.humidity,
+            "light_state": state.light_state
+        })
 
-    audio_filename = f"speech_{uuid.uuid4().hex[:8]}.mp3"
-    audio_path = AUDIO_DIR / audio_filename
+    return changed
 
-    # Voz en español enérgica y clara (Jorge de México o Álvaro de España)
-    communicate = edge_tts.Communicate(spoken_text, "es-MX-JorgeNeural", rate="+5%")
-    await communicate.save(str(audio_path))
-
-    return audio_filename
+def sanitize_ai_reply(text: str) -> str:
+    """Elimina etiquetas de control de hardware para que no se pronuncien por voz."""
+    clean = re.sub(r'\[LUZ_ON\]|\[LUZ_OFF\]|\[BLINK\]|\[SERVO_[^\]]+\]', '', text)
+    return clean_for_speech(clean)
 
 # -----------------------------------------------------------------------------
 # RUTAS DE LA API HTTP
 # -----------------------------------------------------------------------------
 @app.get("/api/status")
 async def get_status():
-    """Devuelve el estado completo de sensores y conexiones."""
+    """Devuelve el estado completo del servidor, telemetría, Ollama y voces disponibles."""
+    ollama_info = check_ollama()
+    voices_dict = {k: v["name"] for k, v in VOICES.items()}
     return {
+        "status": "online",
         "temperature": state.temperature,
         "humidity": state.humidity,
         "light_state": state.light_state,
@@ -166,52 +133,121 @@ async def get_status():
         "eyes_angle": state.eyes_angle,
         "esp32_connected": state.esp32_connected,
         "mobile_connected": len(state.mobile_sockets) > 0,
+        "ollama_ready": ollama_info["ready"],
+        "model": ollama_info["model"],
+        "available_models": ollama_info["available_models"],
+        "voices": voices_dict
     }
 
-@app.post("/api/chat")
-async def chat_endpoint(req: ChatRequest):
+@app.post("/api/process-audio")
+async def process_audio(
+    audio: UploadFile = File(...),
+    voice: str = Form("jorge"),
+    history_json: str = Form("[]")
+):
     """
-    Recibe la transcripción de voz desde el celular, procesa con IA,
-    genera audio para el altavoz del celular y prepara los comandos físicos.
+    Recibe el archivo de audio WAV (16kHz PCM) grabado desde el celular,
+    lo transcribe (STT en español), consulta a Qwen 2.5 en Ollama con el contexto
+    de telemetría del robot, acciona comandos de hardware si corresponde, y sintetiza
+    la respuesta con la voz de Loquendo seleccionada.
+    """
+    try:
+        audio_content = await audio.read()
+        if not audio_content:
+            raise HTTPException(status_code=400, detail="Archivo de audio vacío.")
+
+        # 1. Reconocimiento de voz a texto (STT)
+        transcription = transcribe_audio_bytes(audio_content)
+
+        # 2. Historial de conversación
+        try:
+            history = json.loads(history_json)
+        except Exception:
+            history = []
+
+        # 3. Consulta al modelo local Qwen 2.5 vía Ollama
+        raw_response = query_qwen(
+            prompt=transcription,
+            history=history,
+            temperature=state.temperature,
+            humidity=state.humidity,
+            light_state=state.light_state
+        )
+
+        # 4. Procesar comandos físicos (Luz, parpadeo, etc.)
+        await apply_hardware_tags(raw_response)
+
+        # 5. Limpieza de texto para voz
+        speech_text = sanitize_ai_reply(raw_response)
+        if not speech_text:
+            speech_text = "Comando ejecutado correctamente."
+
+        # 6. Síntesis de voz Loquendo
+        audio_bytes, audio_filename = generate_loquendo_speech(speech_text, voice_key=voice)
+        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+
+        return {
+            "transcription": transcription,
+            "response": raw_response,
+            "speech_text": speech_text,
+            "audio_url": f"/audio/{audio_filename}",
+            "audio_base64": f"data:audio/mpeg;base64,{audio_b64}",
+            "light_state": state.light_state
+        }
+
+    except ValueError as ve:
+        raise HTTPException(status_code=422, detail=str(ve))
+    except Exception as e:
+        print(f"[Error /api/process-audio] {e}")
+        raise HTTPException(status_code=500, detail=f"Error en el servidor: {str(e)}")
+
+@app.post("/api/chat")
+async def chat_text(req: ChatRequest):
+    """
+    Procesa consultas de texto directo o Web Speech API desde la interfaz móvil.
+    Consulta al modelo local en Ollama y devuelve la respuesta sintetizada con Loquendo.
     """
     user_text = req.text.strip()
     if not user_text:
-        raise HTTPException(status_code=400, detail="Texto vacío")
+        raise HTTPException(status_code=400, detail="Texto vacío.")
 
-    # 1. Obtener respuesta de la IA
-    ai_response = await query_llm(user_text)
+    try:
+        # 1. Consulta al modelo local en Ollama
+        raw_response = query_qwen(
+            prompt=user_text,
+            history=req.history,
+            temperature=state.temperature,
+            humidity=state.humidity,
+            light_state=state.light_state
+        )
 
-    # 2. Verificar si hay órdenes de luz
-    light_updated = False
-    if "[LUZ_ON]" in ai_response:
-        state.light_state = 1
-        light_updated = True
-    elif "[LUZ_OFF]" in ai_response:
-        state.light_state = 0
-        light_updated = True
+        # 2. Procesar etiquetas de control físico
+        await apply_hardware_tags(raw_response)
 
-    # Si cambió la luz y el ESP32 está conectado, enviar comando directo
-    if light_updated and state.esp32_socket:
-        cmd = f"CMD:M={state.mouth_angle},E={state.eyes_angle},B=0,L={state.light_state}\n"
-        try:
-            await state.esp32_socket.send_text(cmd)
-        except Exception:
-            pass
+        # 3. Limpieza de texto
+        speech_text = sanitize_ai_reply(raw_response)
+        if not speech_text:
+            speech_text = "Comando procesado."
 
-    # 3. Generar audio para el altavoz del celular
-    clean_ai_text = re.sub(r'\[LUZ_ON\]|\[LUZ_OFF\]', '', ai_response).strip()
-    audio_file = await synthesize_speech(clean_ai_text)
+        # 4. Generación de voz con Loquendo
+        audio_bytes, audio_filename = generate_loquendo_speech(speech_text, voice_key=req.voice)
+        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
 
-    return {
-        "user_query": user_text,
-        "ai_response": clean_ai_text,
-        "audio_url": f"/audio/{audio_file}",
-        "light_state": state.light_state,
-    }
+        return {
+            "user_query": user_text,
+            "response": raw_response,
+            "speech_text": speech_text,
+            "audio_url": f"/audio/{audio_filename}",
+            "audio_base64": f"data:audio/mpeg;base64,{audio_b64}",
+            "light_state": state.light_state
+        }
+    except Exception as e:
+        print(f"[Error /api/chat] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/control")
 async def manual_control(req: ControlRequest):
-    """Control manual de los servomotores y luz desde el panel móvil."""
+    """Control manual directo de servomotores y luz desde los deslizadores móviles."""
     state.mouth_angle = max(90, min(130, req.mouth))
     state.eyes_angle = max(60, min(120, req.eyes))
     if req.light in (0, 1):
@@ -228,11 +264,22 @@ async def manual_control(req: ControlRequest):
 
 @app.get("/audio/{filename}")
 async def serve_audio(filename: str):
-    """Sirve los archivos de audio sintetizados hacia el altavoz del celular."""
-    file_path = AUDIO_DIR / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="Audio no encontrado")
-    return FileResponse(file_path, media_type="audio/mpeg")
+    """Sirve archivos MP3 cacheados con soporte de streaming HTTP Range para navegadores móviles."""
+    safe_name = os.path.basename(filename)
+    file_path = AUDIO_DIR / safe_name
+    if file_path.exists():
+        media_type = "audio/wav" if safe_name.endswith(".wav") else "audio/mpeg"
+        return FileResponse(file_path, media_type=media_type, headers={"Accept-Ranges": "bytes"})
+    raise HTTPException(status_code=404, detail="Audio no encontrado")
+
+@app.get("/api/tts")
+async def get_tts(text: str, voice: str = "jorge"):
+    """Generación rápida directa de audio para cualquier texto arbitrario."""
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Texto vacío")
+    cleaned = clean_for_speech(text)
+    audio_bytes, _ = generate_loquendo_speech(cleaned, voice_key=voice)
+    return Response(content=audio_bytes, media_type="audio/mpeg")
 
 # -----------------------------------------------------------------------------
 # WEBSOCKET 1: COMUNICACIÓN CON ESP32 DEVKIT V1
@@ -248,14 +295,12 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
     state.esp32_socket = websocket
     print("[WS ESP32] ¡ESP32 DevKit V1 conectado al servidor!")
 
-    # Notificar a la app móvil del celular
     await broadcast_to_mobile({"type": "esp32_status", "connected": True})
 
     try:
         while True:
             data = await websocket.receive_text()
             data = data.strip()
-            print(f"[WS ESP32 -> PC] {data}")
 
             # Parsear trama de telemetría de sensores: SENS:T=23.5,H=58.2
             if data.startswith("SENS:"):
@@ -271,8 +316,8 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
                                 state.humidity = float(v)
                         except ValueError:
                             pass
-                
-                # Reenviar telemetría en tiempo real a la interfaz móvil del celular
+
+                # Transmitir telemetría en vivo a las aplicaciones móviles
                 await broadcast_to_mobile({
                     "type": "telemetry",
                     "temperature": state.temperature,
@@ -323,7 +368,7 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
             if event_type == "lipsync_frame":
                 mouth_angle = int(msg.get("mouth", 90))
                 state.mouth_angle = max(90, min(130, mouth_angle))
-                
+
                 # Reenviar al ESP32 sin demora
                 if state.esp32_socket:
                     cmd = f"CMD:M={state.mouth_angle},E={state.eyes_angle},B=0,L={state.light_state}\n"
@@ -332,7 +377,7 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
                     except Exception:
                         pass
 
-            # Control manual desde sliders del teléfono
+            # Control manual desde deslizadores del teléfono
             elif event_type == "manual_move":
                 m = msg.get("mouth", state.mouth_angle)
                 e = msg.get("eyes", state.eyes_angle)
@@ -355,7 +400,7 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
         print(f"[WS MÓVIL] Celular desconectado. Restantes: {len(state.mobile_sockets)}")
 
 async def broadcast_to_mobile(payload: Dict[str, Any]):
-    """Transmite eventos a todos los celulares conectados."""
+    """Transmite eventos a todos los clientes móviles conectados."""
     disconnected = []
     for ws in state.mobile_sockets:
         try:
@@ -367,11 +412,10 @@ async def broadcast_to_mobile(payload: Dict[str, Any]):
             state.mobile_sockets.remove(ws)
 
 # -----------------------------------------------------------------------------
-# MONTAR ARCHIVOS ESTÁTICOS DE LA APP MÓVIL
+# MONTAR APLICACIÓN WEB ESTÁTICA
 # -----------------------------------------------------------------------------
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
-
