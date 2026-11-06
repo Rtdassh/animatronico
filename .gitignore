@@ -1,0 +1,34 @@
+# ==============================================================================
+# GITIGNORE - SISTEMA ANIMATRÓNICO INTELIGENTE
+# ==============================================================================
+
+# Archivos compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+ENV/
+
+# Archivos de audio generados dinámicamente
+server_pc/audio/*.mp3
+!server_pc/audio/.gitkeep
+
+# Archivos temporales de sistema operativo y editores
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Documentos internos, reportes PDF y logs de depuración
+*.pdf
+*.log
