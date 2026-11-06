@@ -28,7 +28,7 @@ Sistema robótico interactivo de 4 niveles que desacopla el procesamiento de Int
 ```
 
 1. **Smartphone (Micrófono & Altavoz Inalámbrico):** Interfaz web táctil con grabación directa en PCM WAV (16kHz), analizador espectral (Web Audio API) y reproducción de audio por el altavoz del teléfono. Calcula la envolvente fonética para una modulación labial (*Lip-Sync*) con cero desfase y control de servos físico en tiempo real.
-2. **PC Local (Cerebro Central):** Servidor asíncrono en Python con FastAPI. Conecta con el modelo local **Qwen 2.5 (7B)** vía Ollama, sintetiza la legendaria voz de **Loquendo** (Jorge, Carlos, Carmen) con caché en disco y administra la telemetría ambiental.
+2. **PC Local (Cerebro Central):** Servidor asíncrono en Python con FastAPI. Conecta con el modelo local **Qwen 2.5 (7B)** vía Ollama, sintetiza voz neuronal con el esqueleto de **Voicebox** (detección dinámica de perfiles locales) y las legendarias voces de **Loquendo** (Jorge, Carlos, Carmen) con caché en disco y administra la telemetría ambiental.
 3. **ESP32 DevKit V1 (Pasarela Inalámbrica):** Cliente WebSocket de alta velocidad conectado a la PC. Reenvía instrucciones de movimiento por `Serial2` al Arduino Uno en menos de $2\text{ ms}$.
 4. **Arduino Uno R3 (Controlador de Tiempo Real):** Módulo esclavo libre de interrupciones Wi-Fi que ejecuta un bucle determinista con `millis()`. Acciona los 3 servos SG90 (ojos, párpados, mandíbula) sin temblores (*jitter*), genera parpadeo autónomo y reporta telemetría periódica del sensor I2C **LM75A** y sensor de humedad **DHT11**.
 
@@ -52,12 +52,13 @@ animatronico/
 │       └── esp32_puente_websocket.ino    # Firmware ESP32 (Cliente WebSocket <-> UART2)
 │
 ├── server_pc/                             # Servidor local y aplicación móvil táctil
-│   ├── app.py                            # Servidor FastAPI + WebSockets + Ollama + Loquendo TTS
+│   ├── app.py                            # Servidor FastAPI + WebSockets + Ollama + Loquendo / Voicebox TTS
 │   ├── run_server.py                     # Lanzador con túnel Cloudflare HTTPS y QR en consola
 │   ├── start.py                          # Alias de conveniencia para run_server.py
 │   ├── start.bat                         # Lanzador por lotes para Windows
 │   ├── ollama_client.py                  # Cliente de inferencia Qwen 2.5 local con telemetría
 │   ├── tts_loquendo.py                   # Motor Loquendo (Jorge, Carlos, Carmen) con caché MD5
+│   ├── voicebox_client.py                # Esqueleto de integración con servidor local Voicebox
 │   ├── stt_engine.py                     # Reconocimiento de voz a texto (WAV 16kHz)
 │   ├── requirements.txt                  # Dependencias de Python
 │   ├── bin/                              # Binarios de soporte (cloudflared.exe para HTTPS móvil)

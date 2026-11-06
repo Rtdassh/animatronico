@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from ollama_client import query_qwen, clean_for_speech, check_ollama, get_best_model
 from tts_loquendo import generate_loquendo_speech, VOICES, AUDIO_DIR
 from stt_engine import transcribe_audio_bytes
+from voicebox_client import generate_voicebox_speech, is_voicebox_running, get_voicebox_profiles
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
@@ -116,6 +117,22 @@ def sanitize_ai_reply(text: str) -> str:
     clean = re.sub(r'\[LUZ_ON\]|\[LUZ_OFF\]|\[BLINK\]|\[SERVO_[^\]]+\]', '', text)
     return clean_for_speech(clean)
 
+def synthesize_speech(text: str, voice_key: str = "jorge") -> tuple[bytes, str, str]:
+    """
+    Sintetiza la voz utilizando Voicebox (esqueleto dinámico) o Loquendo (Jorge, Carlos, Carmen).
+    Retorna: (audio_bytes, audio_filename, media_type).
+    """
+    vk = voice_key.lower().strip()
+    if vk.startswith("voicebox") or vk == "dom":
+        profile_id = None
+        if "_" in vk:
+            profile_id = vk.split("_", 1)[1]
+        audio_bytes, audio_filename = generate_voicebox_speech(text, profile_id=profile_id)
+        return audio_bytes, audio_filename, "audio/wav"
+    else:
+        audio_bytes, audio_filename = generate_loquendo_speech(text, voice_key=vk)
+        return audio_bytes, audio_filename, "audio/mpeg"
+
 # -----------------------------------------------------------------------------
 # RUTAS DE LA API HTTP
 # -----------------------------------------------------------------------------
@@ -123,7 +140,18 @@ def sanitize_ai_reply(text: str) -> str:
 async def get_status():
     """Devuelve el estado completo del servidor, telemetría, Ollama y voces disponibles."""
     ollama_info = check_ollama()
+    vb_ready = is_voicebox_running()
     voices_dict = {k: v["name"] for k, v in VOICES.items()}
+    if vb_ready:
+        profiles = get_voicebox_profiles()
+        if profiles:
+            for p in profiles:
+                p_id = p.get("id")
+                p_name = p.get("name", "Voz Clonada")
+                voices_dict[f"voicebox_{p_id}"] = f"{p_name} (Voicebox IA)"
+        else:
+            voices_dict["voicebox"] = "Voz Clonada (Voicebox IA)"
+
     return {
         "status": "online",
         "temperature": state.temperature,
@@ -134,6 +162,7 @@ async def get_status():
         "esp32_connected": state.esp32_connected,
         "mobile_connected": len(state.mobile_sockets) > 0,
         "ollama_ready": ollama_info["ready"],
+        "voicebox_ready": vb_ready,
         "model": ollama_info["model"],
         "available_models": ollama_info["available_models"],
         "voices": voices_dict
@@ -149,7 +178,7 @@ async def process_audio(
     Recibe el archivo de audio WAV (16kHz PCM) grabado desde el celular,
     lo transcribe (STT en español), consulta a Qwen 2.5 en Ollama con el contexto
     de telemetría del robot, acciona comandos de hardware si corresponde, y sintetiza
-    la respuesta con la voz de Loquendo seleccionada.
+    la respuesta con la voz seleccionada (Loquendo o Voicebox Dom).
     """
     try:
         audio_content = await audio.read()
@@ -182,8 +211,8 @@ async def process_audio(
         if not speech_text:
             speech_text = "Comando ejecutado correctamente."
 
-        # 6. Síntesis de voz Loquendo
-        audio_bytes, audio_filename = generate_loquendo_speech(speech_text, voice_key=voice)
+        # 6. Síntesis de voz (Loquendo o Voicebox Dom)
+        audio_bytes, audio_filename, media_type = synthesize_speech(speech_text, voice_key=voice)
         audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
 
         return {
@@ -191,7 +220,7 @@ async def process_audio(
             "response": raw_response,
             "speech_text": speech_text,
             "audio_url": f"/audio/{audio_filename}",
-            "audio_base64": f"data:audio/mpeg;base64,{audio_b64}",
+            "audio_base64": f"data:{media_type};base64,{audio_b64}",
             "light_state": state.light_state
         }
 
@@ -205,7 +234,7 @@ async def process_audio(
 async def chat_text(req: ChatRequest):
     """
     Procesa consultas de texto directo o Web Speech API desde la interfaz móvil.
-    Consulta al modelo local en Ollama y devuelve la respuesta sintetizada con Loquendo.
+    Consulta al modelo local en Ollama y devuelve la respuesta sintetizada con Loquendo o Voicebox Dom.
     """
     user_text = req.text.strip()
     if not user_text:
@@ -229,8 +258,8 @@ async def chat_text(req: ChatRequest):
         if not speech_text:
             speech_text = "Comando procesado."
 
-        # 4. Generación de voz con Loquendo
-        audio_bytes, audio_filename = generate_loquendo_speech(speech_text, voice_key=req.voice)
+        # 4. Generación de voz (Loquendo o Voicebox Dom)
+        audio_bytes, audio_filename, media_type = synthesize_speech(speech_text, voice_key=req.voice)
         audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
 
         return {
@@ -238,7 +267,7 @@ async def chat_text(req: ChatRequest):
             "response": raw_response,
             "speech_text": speech_text,
             "audio_url": f"/audio/{audio_filename}",
-            "audio_base64": f"data:audio/mpeg;base64,{audio_b64}",
+            "audio_base64": f"data:{media_type};base64,{audio_b64}",
             "light_state": state.light_state
         }
     except Exception as e:
@@ -278,8 +307,8 @@ async def get_tts(text: str, voice: str = "jorge"):
     if not text.strip():
         raise HTTPException(status_code=400, detail="Texto vacío")
     cleaned = clean_for_speech(text)
-    audio_bytes, _ = generate_loquendo_speech(cleaned, voice_key=voice)
-    return Response(content=audio_bytes, media_type="audio/mpeg")
+    audio_bytes, _, media_type = synthesize_speech(cleaned, voice_key=voice)
+    return Response(content=audio_bytes, media_type=media_type)
 
 # -----------------------------------------------------------------------------
 # WEBSOCKET 1: COMUNICACIÓN CON ESP32 DEVKIT V1

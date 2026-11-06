@@ -20,13 +20,14 @@ server_pc/audio/*.wav
 server_pc/audio_cache/
 !server_pc/audio/.gitkeep
 
-# Binarios pesados
-server_pc/bin/*.exe
-
-# Exclusiones de privacidad
-*voicebox*
+# Perfiles de voz y datos privados locales
+server_pc/voicebox_profile/
+voicebox_profile/
 *.voicebox*
 *.zip
+
+# Binarios pesados
+server_pc/bin/*.exe
 
 # Archivos temporales de sistema operativo y editores
 .DS_Store

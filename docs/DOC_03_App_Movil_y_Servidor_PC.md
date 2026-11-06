@@ -13,9 +13,9 @@ Se aprovecha el **Smartphone que ya posees** (conectado a la misma red local Wi-
 1. **Micrófono Inalámbrico de Alta Fidelidad:**
    - **Grabación Directa Web Audio (16kHz PCM WAV):** Captura el flujo de audio puro del micrófono del celular sin compresión ruidosa, lo envía al endpoint `/api/process-audio` de la PC y se transcribe en el servidor mediante el motor STT (Google Speech Recognition en español). Esta arquitectura garantiza compatibilidad total en iPhone (iOS Safari) y Android (Chrome), superando las limitaciones y bloqueos de las APIs de reconocimiento nativas de navegador.
    - **Visualizador de Forma de Onda en Tiempo Real:** Un canvas dinámico muestra las oscilaciones de tu voz mientras hablas.
-2. **Altavoz Inalámbrico con Voces de Loquendo y Lip-Sync Dinámico:**
-   - Reproduce la voz sintetizada de la legendaria voz de **Loquendo** (Jorge de España, Carlos de Latinoamérica o Carmen).
-   - Incluye motor de caché en disco (`audio/`) basado en hashes MD5 para respuestas instantáneas en consultas frecuentes.
+2. **Altavoz Inalámbrico con Voces de Loquendo / Voicebox y Lip-Sync Dinámico:**
+   - Reproduce la voz sintetizada con **Voicebox IA (esqueleto dinámico para perfiles locales)** o las legendarias voces de **Loquendo** (Jorge de España, Carlos de Latinoamérica o Carmen).
+   - Incluye motor de caché en disco (`audio/`) basado en hashes MD5 para respuestas instantáneas en consultas frecuentes (formatos MP3 y WAV).
    - Mediante la **Web Audio API (`AnalyserNode`)**, calcula en tiempo real ($60\text{ fps}$) la envolvente fonética para transmitir los ángulos de apertura de la mandíbula al ESP32 y Arduino.
 
 ---
@@ -59,7 +59,7 @@ sequenceDiagram
 ## 3. Características de la Interfaz Web Móvil
 
 * **Diseño Nativo Táctil:** Optimizada para no requerir instalación de APKs pesadas; funciona directo desde Google Chrome o Safari móvil.
-* **Selector de Voz en Vivo:** Permite alternar entre **Jorge (España)**, **Carlos (Latinoamérica)** y **Carmen (España)**.
+* **Selector de Voz en Vivo:** Permite alternar entre las voces de **Loquendo** (Jorge, Carlos, Carmen) y los perfiles locales de **Voicebox IA** si el servicio está activo en el puerto 17493.
 * **Túnel Seguro Cloudflare HTTPS Integrado:** Genera automáticamente un enlace seguro temporal (`https://*.trycloudflare.com`) para que Safari en iPhone y Chrome en Android otorguen permisos de micrófono sin advertencias de certificado ni restricciones de red.
 * **Simulador Facial en Tiempo Real:** Cuenta con una cara robótica virtual que parpadea autónomamente, rastrea con la pupila y modula su mandíbula en pantalla simultáneamente con el robot físico.
 * **Telemetría en Vivo:**

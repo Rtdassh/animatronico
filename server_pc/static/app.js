@@ -112,10 +112,29 @@ async function checkBackendStatus() {
 
     if (data.ollama_ready) {
       ollamaDot.classList.add('ready');
-      modelStatusText.textContent = `🟢 Ollama listo (${data.model})`;
+      let statusStr = `🟢 Ollama listo (${data.model})`;
+      if (data.voicebox_ready) {
+        statusStr += ` | 🎙️ Voicebox Activo`;
+      }
+      modelStatusText.textContent = statusStr;
     } else {
       ollamaDot.classList.remove('ready');
       modelStatusText.textContent = `🟡 Ollama esperando (${data.model})`;
+    }
+
+    if (data.voices && voiceSelect) {
+      const currentVal = voiceSelect.value;
+      voiceSelect.innerHTML = '';
+      for (const [vKey, vName] of Object.entries(data.voices)) {
+        const opt = document.createElement('option');
+        opt.value = vKey;
+        opt.textContent = vName;
+        if (vKey === currentVal) opt.selected = true;
+        voiceSelect.appendChild(opt);
+      }
+      if (!voiceSelect.value && voiceSelect.options.length > 0) {
+        voiceSelect.selectedIndex = 0;
+      }
     }
 
     if (data.temperature !== undefined) updateTelemetry(data.temperature, data.humidity);
@@ -596,13 +615,16 @@ async function playVoiceResponse(audioUrl, audioBase64, responseText) {
   unlockAudioSession();
   setupPlaybackWebAudio();
 
+  const selectedText = voiceSelect && voiceSelect.selectedOptions[0] ? voiceSelect.selectedOptions[0].textContent : 'Loquendo';
+  const voiceName = selectedText.split(' ')[0] || 'Asistente';
+
   statusCaption.textContent = responseText;
-  subCaption.textContent = '🔊 Reproduciendo con voz de Loquendo...';
+  subCaption.textContent = `🔊 Reproduciendo con voz de ${voiceName}...`;
 
   if (replayAudioContainer) replayAudioContainer.style.display = 'block';
   if (btnReplayAudio) {
     btnReplayAudio.classList.add('speaking-active');
-    btnReplayAudio.textContent = '🔊 Hablando con Loquendo...';
+    btnReplayAudio.textContent = `🔊 Hablando con ${voiceName}...`;
   }
 
   const srcToUse = audioUrl || audioBase64;
@@ -670,10 +692,13 @@ function finishPlayback() {
   if (jawLower) jawLower.style.transform = 'translateY(0px)';
   sendLipsyncFrame(90);
 
+  const selectedText = voiceSelect && voiceSelect.selectedOptions[0] ? voiceSelect.selectedOptions[0].textContent : 'Loquendo';
+  const voiceName = selectedText.split(' ')[0] || 'Asistente';
+
   subCaption.textContent = 'Toca el micrófono para volver a hablar';
   if (btnReplayAudio) {
     btnReplayAudio.classList.remove('speaking-active');
-    btnReplayAudio.textContent = '🔊 Volver a escuchar a Loquendo';
+    btnReplayAudio.textContent = `🔊 Volver a escuchar a ${voiceName}`;
   }
 }
 
