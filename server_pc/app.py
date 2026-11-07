@@ -33,8 +33,8 @@ STATIC_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(
-    title="Cíclope AI · Servidor Animatrónico Inteligente",
-    description="Servidor local con Ollama (Qwen 2.5), Loquendo TTS y control cinemático ESP32/Arduino.",
+    title="animatronico · Servidor Inteligente",
+    description="Servidor local con Ollama (Qwen 2.5), TTS y control cinemático ESP32/Arduino.",
     version="2.0"
 )
 
@@ -405,6 +405,23 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
                         await state.esp32_socket.send_text(cmd)
                     except Exception:
                         pass
+
+            # Notificación de palabra clave Wake-Word ("Oye Robot", "Alexa")
+            elif event_type == "wake_alert":
+                state.eyes_angle = 90
+                state.light_state = 1
+                if state.esp32_socket:
+                    cmd = f"CMD:E=90,EV=90,B=1,L=1\n"
+                    try:
+                        await state.esp32_socket.send_text(cmd)
+                    except Exception:
+                        pass
+                await broadcast_to_mobile({
+                    "type": "telemetry",
+                    "temperature": state.temperature,
+                    "humidity": state.humidity,
+                    "light_state": state.light_state
+                })
 
             # Control manual desde deslizadores del teléfono
             elif event_type == "manual_move":

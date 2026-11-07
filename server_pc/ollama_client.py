@@ -67,7 +67,7 @@ def build_system_prompt(temperature: float = 23.5, humidity: float = 55.0, light
     """Construye el prompt de sistema del animatrónico con telemetría en vivo y reglas de síntesis."""
     light_str = "ENCENDIDA" if light_state == 1 else "APAGADA"
     return (
-        "Eres 'Cíclope', una cabeza animatrónica interactiva con inteligencia artificial local. "
+        "Eres 'Animatrónico', una cabeza animatrónica interactiva con inteligencia artificial local. "
         "Posees un microcontrolador ESP32 como puente y un Arduino Uno que controla tus 3 servomotores y sensores.\n"
         f"- Sensores actuales del laboratorio: Temperatura ambiente (LM75A): {temperature:.1f} °C, Humedad (DHT11): {humidity:.0f} %.\n"
         f"- Luz del laboratorio: {light_str}.\n"
@@ -96,7 +96,7 @@ def query_fallback(prompt: str, temperature: float, humidity: float, light_state
     elif "apaga" in p and "luz" in p:
         return "[LUZ_OFF] Listo, acabo de apagar la luz del laboratorio."
     elif any(w in p for w in ["quien eres", "qué eres", "que haces", "proyecto"]):
-        return ("Soy Cíclope, la cabeza animatrónica con inteligencia artificial local. Utilizo tu celular como micrófono y altavoz, "
+        return ("Soy el Animatrónico, una cabeza animatrónica con inteligencia artificial local. Utilizo tu dispositivo como micrófono y altavoz, "
                 "mientras mi Arduino y ESP32 controlan mis expresiones faciales y sensores.")
     elif any(w in p for w in ["chiste", "broma", "gracioso"]):
         return ("¿Por qué los robots nunca se deprimen? Porque tenemos un algoritmo optimista y cables resistentes al desánimo.")

@@ -43,3 +43,9 @@ Desktop.ini
 # Documentos internos, reportes PDF y logs de depuración
 *.pdf
 *.log
+
+# Artefactos de compilación intermedios
+*.elf
+*.map
+build/
+**/build/

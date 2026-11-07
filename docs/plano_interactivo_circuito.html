@@ -4,77 +4,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Plano Eléctrico Interactivo · Sistema Animatrónico (ESP32 + Arduino Uno + LM75A + DHT11)</title>
-  <!-- Google Fonts -->
+  <title>Plano Esquemático Eléctrico: Mecanismo Ocular ε3.2 + PCA9685 + Módulo Audio</title>
+  <!-- Tailwind CSS CDN para renderizado estético profesional -->
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
-    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap"
     rel="stylesheet">
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-            mono: ['"JetBrains Mono"', 'monospace'],
-          },
-          colors: {
-            brand: {
-              navy: '#0b1329',
-              darkSlate: '#0f172a',
-              cardBg: '#ffffff',
-              borderSlate: '#e2e8f0',
-              accentCyan: '#0284c7',
-              accentEmerald: '#059669',
-              accentAmber: '#d97706',
-              accentPurple: '#7c3aed',
-            }
-          }
-        }
-      }
-    }
-  </script>
   <style>
     body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      background-color: #f8fafc;
+      font-family: 'Inter', sans-serif;
+      background-color: #0b1329;
       color: #0f172a;
+    }
+
+    code,
+    pre {
+      font-family: 'Fira Code', monospace;
     }
 
     .wire-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 700;
-      font-family: 'JetBrains Mono', monospace;
+      gap: 0.375rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
     }
 
     .badge-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      display: inline-block;
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 9999px;
     }
 
     @media print {
       body {
-        background: white;
-        padding: 0;
+        background-color: #ffffff;
       }
 
       .no-print {
-        display: none !important;
-      }
-
-      @page {
-        size: A4 landscape;
-        margin: 10mm;
+        display: none;
       }
     }
   </style>
@@ -86,25 +58,29 @@
   <header class="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-sm">
     <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-5">
       <div>
-        <div class="flex items-center gap-2 mb-2">
+        <div class="flex items-center gap-2 mb-2 flex-wrap">
           <span
             class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-            Esquema Esquemático & Plano de Conexiones
+            Esquema Esquemático Oficial
           </span>
           <span
-            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Sensor Digital LM75A (I2C) + DHT11
+            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            Mecanismo Ocular ε3.2 (Will Cogley · MakerWorld #1184807)
           </span>
           <span
             class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-            Versión 1.2 Oficial
+            PCA9685 16-Ch PWM (I2C: 0x40)
+          </span>
+          <span
+            class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            Smartphone Manos Libres (Micrófono + Altavoz Alexa)
           </span>
         </div>
         <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
-          Plano Eléctrico de Interconexión Total
+          Plano Eléctrico de Conexión: Mecanismo Ocular ε3.2 + PCA9685
         </h1>
         <p class="text-slate-500 font-medium text-sm mt-1">
-          Arquitectura Hardware: ESP32 DevKit V1 + Arduino Uno R3 + Bus I2C + 3 Servos SG90 + Fuente Aislada
+          Arquitectura: Arduino Uno R3 (Maestro I2C) + ESP32 DevKit V1 (Wi-Fi) + PCA9685 (6 Servos ε3.2) + Smartphone Manos Libres + Fuente Externa 5V 4A
         </p>
       </div>
 
@@ -129,24 +105,24 @@
     </div>
 
     <!-- REGLAS DE ORO EN BLOQUE ALERTAS -->
-    <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
       <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl">
         <div class="flex items-center gap-2 text-xs font-bold text-red-800 uppercase tracking-wider mb-1">
           <span class="badge-dot bg-red-600"></span>
-          1. Potencia Aislada Servos
+          1. Fuente Externa 5V (4A)
         </div>
         <p class="text-xs text-red-700 leading-relaxed">
-          Los 3 servos SG90 demandan hasta <strong>1.5A pico</strong>. Se alimentan <strong>únicamente</strong> desde la fuente externa de 5V con el capacitor de 1000 µF en paralelo. <em>Prohibido conectarlos a los 5V del Arduino.</em>
+          Los 6 servos ε3.2 se alimentan por la bornera <strong>V+ y GND</strong> del PCA9685 con desacoplo de <strong>2200 µF + 100 nF</strong>. <em>Nunca alimentar servos desde el Arduino.</em>
         </p>
       </div>
 
-      <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl">
-        <div class="flex items-center gap-2 text-xs font-bold text-amber-800 uppercase tracking-wider mb-1">
-          <span class="badge-dot bg-amber-600"></span>
-          2. Protección UART (Divisor)
+      <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-xl">
+        <div class="flex items-center gap-2 text-xs font-bold text-indigo-800 uppercase tracking-wider mb-1">
+          <span class="badge-dot bg-indigo-600"></span>
+          2. Bus I2C Compartido
         </div>
-        <p class="text-xs text-amber-700 leading-relaxed">
-          El pin D3 del Arduino genera <strong>5V</strong>. Debe pasar por <strong>R1 (1 kΩ)</strong> y <strong>R2 (2 kΩ)</strong> para ingresar al GPIO 16 (RX2) del ESP32 a <strong>3.33V seguros</strong>.
+        <p class="text-xs text-indigo-700 leading-relaxed">
+          Arduino <strong>A4 (SDA)</strong> y <strong>A5 (SCL)</strong> gobiernan simultáneamente el sensor <strong>LM75A (0x48)</strong> y el driver <strong>PCA9685 (0x40)</strong> sin conflictos de dirección.
         </p>
       </div>
 
@@ -156,7 +132,17 @@
           3. Tierra Común (GND)
         </div>
         <p class="text-xs text-slate-700 leading-relaxed">
-          El GND del Arduino, el GND del ESP32 y el polo negativo de la fuente de los servos <strong>deben unirse físicamente</strong> en el riel de la protoboard. Sin tierra común, los servos temblarán.
+          Arduino GND, ESP32 GND, PCA9685 GND, módulo de audio y polo negativo (-) de la fuente de 5V deben estar <strong>unidos en un riel común</strong> de referencia.
+        </p>
+      </div>
+
+      <div class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-r-xl">
+        <div class="flex items-center gap-2 text-xs font-bold text-indigo-800 uppercase tracking-wider mb-1">
+          <span class="badge-dot bg-indigo-600"></span>
+          4. Audio Manos Libres (Smartphone)
+        </div>
+        <p class="text-xs text-indigo-700 leading-relaxed">
+          El celular es el único micrófono y altavoz tipo Alexa. Detecta la palabra clave ("Oye Robot"), responde "¿En qué te ayudo?" y reproduce la IA. <strong>Pines D10 y D11 quedan 100% libres</strong> en el Arduino Uno.
         </p>
       </div>
     </div>
@@ -170,17 +156,17 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        Esquema Gráfico en Alta Resolución (Diagrama Unifilar & Modular)
+        Esquema Gráfico en Alta Resolución (Diagrama Unifilar & Modular con PCA9685)
       </h2>
-      <span class="text-xs text-slate-500 font-mono">Renderizado: 2600 × 1650 px</span>
+      <span class="text-xs text-slate-500 font-mono">Renderizado Digital: 3800 × 2250 px (Separación visual ampliada)</span>
     </div>
 
     <div class="border border-slate-200 rounded-xl overflow-hidden bg-slate-50 shadow-inner flex justify-center">
-      <img src="plano_circuito_animatronico.png" alt="Plano Eléctrico de Conexiones"
-        class="w-full h-auto object-contain max-h-[850px] rounded-xl hover:scale-[1.01] transition-transform duration-300">
+      <img src="plano_circuito_animatronico.png" alt="Plano Eléctrico Mecanismo Ocular ε3.2 con PCA9685"
+        class="w-full h-auto object-contain max-h-[950px] rounded-xl hover:scale-[1.01] transition-transform duration-300">
     </div>
     <p class="text-xs text-slate-500 text-center italic">
-      Nota: Puedes hacer clic derecho en la imagen y seleccionar "Abrir imagen en una nueva pestaña" para inspeccionar los nombres de cada pin y trazo con zoom total.
+      Nota: Haz clic derecho en la imagen y selecciona "Abrir imagen en una nueva pestaña" para inspeccionar las rutas de cables y etiquetas con zoom al 100%.
     </p>
   </section>
 
@@ -192,65 +178,158 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
-        Matriz de Conexión Pin a Pin (Guía Infalible para Prototipado)
+        Matriz de Conexión Pin a Pin: Mecanismo Ocular ε3.2 + PCA9685 + Audio
       </h2>
-      <p class="text-xs text-slate-500 mt-0.5">Sigue esta tabla en orden para cablear tu protoboard sin errores de polaridad ni cruces de señales.</p>
+      <p class="text-xs text-slate-500 mt-0.5">Distribución de señales y potencia organizada para máxima legibilidad e inmunidad contra ruidos.</p>
     </div>
 
-    <!-- TABLA 1: ENLACE UART ARDUINO <-> ESP32 -->
+    <!-- TABLA 1: SERVOS EN PCA9685 -->
     <div class="space-y-3">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-sky-700 bg-sky-50 px-3 py-1.5 rounded-lg inline-block border border-sky-200">
-        1. Enlace Serial UART (ESP32 ↔ Arduino Uno) con Divisor de Tensión
+      <h3 class="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg inline-block border border-amber-200">
+        1. Controlador PCA9685 (I2C: 0x40): 6x Micro-Servos ε3.2 + LED en Arduino
       </h3>
       <div class="overflow-x-auto rounded-xl border border-slate-200">
         <table class="w-full text-left text-xs border-collapse">
           <thead class="bg-slate-100 text-slate-700 uppercase font-mono text-[11px]">
             <tr>
-              <th class="py-3 px-4 border-b">Origen (Pin)</th>
-              <th class="py-3 px-4 border-b">Elemento Intermedio</th>
-              <th class="py-3 px-4 border-b">Destino (Pin)</th>
-              <th class="py-3 px-4 border-b">Color de Cable Sugerido</th>
-              <th class="py-3 px-4 border-b">Voltaje / Justificación Técnica</th>
+              <th class="py-3 px-4 border-b">Actuador / Función</th>
+              <th class="py-3 px-4 border-b">Canal / Pin</th>
+              <th class="py-3 px-4 border-b">Alimentación Potencia (V+)</th>
+              <th class="py-3 px-4 border-b">Retorno (GND)</th>
+              <th class="py-3 px-4 border-b">Rango Angular Seguro</th>
+              <th class="py-3 px-4 border-b">Detalle Mecánico ε3.2</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 font-sans">
+            <!-- CH0 -->
             <tr class="hover:bg-slate-50">
-              <td class="py-2.5 px-4 font-mono font-bold text-slate-800">ESP32 GPIO 17 (TX2)</td>
-              <td class="py-2.5 px-4 text-slate-500">Conexión directa jumper M-M</td>
-              <td class="py-2.5 px-4 font-mono font-bold text-indigo-700">Arduino Pin D2 (RX)</td>
-              <td class="py-2.5 px-4"><span class="wire-badge bg-blue-100 text-blue-800"><span class="badge-dot bg-blue-600"></span>Azul Real</span></td>
-              <td class="py-2.5 px-4 text-slate-600"><strong>3.3V:</strong> El micro ATmega328P lee &gt;3.0V como HIGH lógico estable sin requerir amplificación.</td>
+              <td class="py-2.5 px-4 font-bold text-amber-900">Servo M1: Ojos Horizontal (Pan / Yaw)</td>
+              <td class="py-2 px-4 font-mono font-bold text-amber-700">PCA9685 Canal CH0</td>
+              <td class="py-2 px-4 font-mono text-red-700">Bornera V+ (5V 4A)</td>
+              <td class="py-2 px-4 font-mono text-slate-800">Bornera GND PCA9685</td>
+              <td class="py-2 px-4 text-slate-700"><strong>60° a 120°</strong> (Neutro 90°)</td>
+              <td class="py-2 px-4 text-slate-600">Enlace en paralelogramo de 4 barras: giro lateral coordinado de ambos ojos.</td>
             </tr>
-            <tr class="hover:bg-slate-50">
-              <td class="py-2.5 px-4 font-mono font-bold text-indigo-700">Arduino Pin D3 (TX)</td>
-              <td class="py-2.5 px-4 text-slate-700">Resistencia <strong>R1 = 1 kΩ</strong></td>
-              <td class="py-2.5 px-4 font-mono font-bold text-sky-800">Nodo Central Divisor</td>
-              <td class="py-2.5 px-4"><span class="wire-badge bg-sky-100 text-sky-800"><span class="badge-dot bg-sky-500"></span>Celeste</span></td>
-              <td class="py-2.5 px-4 text-slate-600"><strong>5.0V:</strong> Salida digital del Arduino que debe ser atenuada.</td>
+            <!-- CH1 -->
+            <tr class="hover:bg-slate-50 bg-slate-50/50">
+              <td class="py-2.5 px-4 font-bold text-amber-900">Servo M2: Ojos Vertical (Tilt / Pitch)</td>
+              <td class="py-2 px-4 font-mono font-bold text-amber-700">PCA9685 Canal CH1</td>
+              <td class="py-2 px-4 font-mono text-red-700">Bornera V+ (5V 4A)</td>
+              <td class="py-2 px-4 font-mono text-slate-800">Bornera GND PCA9685</td>
+              <td class="py-2 px-4 text-slate-700"><strong>70° a 110°</strong> (Neutro 90°)</td>
+              <td class="py-2 px-4 text-slate-600">Varilla vertical unida a rótula Gimbal para mirada arriba / abajo.</td>
             </tr>
+            <!-- CH2 -->
             <tr class="hover:bg-slate-50">
-              <td class="py-2.5 px-4 font-mono font-bold text-sky-800">Nodo Central Divisor</td>
-              <td class="py-2.5 px-4 text-slate-700">Resistencia <strong>R2 = 2 kΩ</strong> hacia GND</td>
-              <td class="py-2.5 px-4 font-mono font-bold text-slate-900">ESP32 GPIO 16 (RX2)</td>
-              <td class="py-2.5 px-4"><span class="wire-badge bg-sky-100 text-sky-800"><span class="badge-dot bg-sky-500"></span>Celeste</span></td>
-              <td class="py-2.5 px-4 text-emerald-700 font-semibold"><strong>3.33V:</strong> Protege la compuerta de entrada del ESP32 contra sobretensión destructiva.</td>
+              <td class="py-2.5 px-4 font-bold text-blue-900">Servo M3: Párpado Superior Izquierdo</td>
+              <td class="py-2 px-4 font-mono font-bold text-blue-700">PCA9685 Canal CH2</td>
+              <td class="py-2 px-4 font-mono text-red-700">Bornera V+ (5V 4A)</td>
+              <td class="py-2 px-4 font-mono text-slate-800">Bornera GND PCA9685</td>
+              <td class="py-2 px-4 text-slate-700"><strong>45° (Cerrado) a 100° (Abierto)</strong></td>
+              <td class="py-2 px-4 text-slate-600">Apertura y parpadeo ojo izquierdo. Neutro en 90°.</td>
             </tr>
+            <!-- CH3 -->
+            <tr class="hover:bg-slate-50 bg-slate-50/50">
+              <td class="py-2.5 px-4 font-bold text-sky-900">Servo M4: Párpado Inferior Izquierdo</td>
+              <td class="py-2 px-4 font-mono font-bold text-sky-700">PCA9685 Canal CH3</td>
+              <td class="py-2 px-4 font-mono text-red-700">Bornera V+ (5V 4A)</td>
+              <td class="py-2 px-4 font-mono text-slate-800">Bornera GND PCA9685</td>
+              <td class="py-2 px-4 text-slate-700"><strong>80° (Reposo) a 110° (Elevado)</strong></td>
+              <td class="py-2 px-4 text-slate-600">Elevación sutil para gestos de sonrisa, curiosidad o concentración.</td>
+            </tr>
+            <!-- CH4 -->
             <tr class="hover:bg-slate-50">
-              <td class="py-2.5 px-4 font-mono font-bold text-slate-800">ESP32 GND</td>
-              <td class="py-2.5 px-4 text-slate-500">Puente directo en riel (-)</td>
-              <td class="py-2.5 px-4 font-mono font-bold text-slate-800">Arduino GND</td>
-              <td class="py-2.5 px-4"><span class="wire-badge bg-slate-200 text-slate-900"><span class="badge-dot bg-slate-900"></span>Negro</span></td>
-              <td class="py-2.5 px-4 text-slate-600"><strong>0.0V (Tierra común):</strong> Mismo potencial de referencia para evitar caracteres basura en el puerto serial.</td>
+              <td class="py-2.5 px-4 font-bold text-blue-900">Servo M5: Párpado Superior Derecho</td>
+              <td class="py-2 px-4 font-mono font-bold text-blue-700">PCA9685 Canal CH4</td>
+              <td class="py-2 px-4 font-mono text-red-700">Bornera V+ (5V 4A)</td>
+              <td class="py-2 px-4 font-mono text-slate-800">Bornera GND PCA9685</td>
+              <td class="py-2 px-4 text-slate-700"><strong>45° (Cerrado) a 100° (Abierto)</strong></td>
+              <td class="py-2 px-4 text-slate-600">Apertura y parpadeo ojo derecho. Permite guiños asimétricos individuales.</td>
+            </tr>
+            <!-- CH5 -->
+            <tr class="hover:bg-slate-50 bg-slate-50/50">
+              <td class="py-2.5 px-4 font-bold text-sky-900">Servo M6: Párpado Inferior Derecho</td>
+              <td class="py-2 px-4 font-mono font-bold text-sky-700">PCA9685 Canal CH5</td>
+              <td class="py-2 px-4 font-mono text-red-700">Bornera V+ (5V 4A)</td>
+              <td class="py-2 px-4 font-mono text-slate-800">Bornera GND PCA9685</td>
+              <td class="py-2 px-4 text-slate-700"><strong>80° (Reposo) a 110° (Elevado)</strong></td>
+              <td class="py-2 px-4 text-slate-600">Elevación de párpado inferior derecho para simetría gestual.</td>
+            </tr>
+            <!-- LED -->
+            <tr class="hover:bg-slate-50 bg-emerald-50/40">
+              <td class="py-2.5 px-4 font-bold text-emerald-900">LED / Luz Ambiente</td>
+              <td class="py-2 px-4 font-mono font-bold text-emerald-700">Arduino Pin D7</td>
+              <td class="py-2 px-4 font-mono text-emerald-700">Resistencia 220 Ω</td>
+              <td class="py-2 px-4 font-mono text-slate-800">Arduino GND</td>
+              <td class="py-2 px-4 text-slate-700">0 (OFF) / 1 (ON)</td>
+              <td class="py-2 px-4 text-slate-600">Iluminación controlable por comando de voz o interruptor en la interfaz.</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- TABLA 2: SENSORES LM75A Y DHT11 -->
+    <!-- TABLA 2: SUBSISTEMA DE AUDIO Y SMARTPHONE -->
+    <div class="space-y-3">
+      <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg inline-block border border-indigo-200">
+        2. Subsistema de Audio: Smartphone Inalámbrico Manos Libres (Tipo Alexa / WakeNet)
+      </h3>
+      <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-100 text-slate-700 uppercase font-mono text-[11px]">
+            <tr>
+              <th class="py-3 px-4 border-b">Elemento / Canal</th>
+              <th class="py-3 px-4 border-b">Función en el Sistema</th>
+              <th class="py-3 px-4 border-b">Protocolo / Enlace</th>
+              <th class="py-3 px-4 border-b">Modo de Operación</th>
+              <th class="py-3 px-4 border-b">Detalle de Operación</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 font-sans">
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-4 font-mono font-bold text-indigo-900">Micrófono Celular</td>
+              <td class="py-2 px-4 font-bold text-slate-800">Captura Continua Wake-Word</td>
+              <td class="py-2 px-4"><span class="wire-badge bg-indigo-100 text-indigo-800"><span class="badge-dot bg-indigo-600"></span>Wi-Fi / WebSpeech</span></td>
+              <td class="py-2 px-4 text-slate-700">Manos Libres (Headless)</td>
+              <td class="py-2 px-4 text-slate-600">Escucha continua de palabra clave ("Oye Robot", "Alexa"). Sin interacción táctil en pantalla.</td>
+            </tr>
+            <tr class="hover:bg-slate-50 bg-indigo-50/20">
+              <td class="py-2.5 px-4 font-mono font-bold text-indigo-900">Respuesta de Activación</td>
+              <td class="py-2 px-4 font-bold text-slate-800">Prompt "¿En qué te ayudo?"</td>
+              <td class="py-2 px-4"><span class="wire-badge bg-sky-100 text-sky-800"><span class="badge-dot bg-sky-600"></span>Audio / WebSocket</span></td>
+              <td class="py-2 px-4 text-slate-700">Inmediato al despertar</td>
+              <td class="py-2 px-4 text-slate-600">Emisión acústica instantánea y aviso al robot para centrar mirada y activar LED de atención.</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-4 font-mono font-bold text-purple-900">Altavoz Celular</td>
+              <td class="py-2 px-4 font-bold text-slate-800">Salida de Voz de la IA</td>
+              <td class="py-2 px-4"><span class="wire-badge bg-purple-100 text-purple-800"><span class="badge-dot bg-purple-600"></span>Loquendo / Voicebox</span></td>
+              <td class="py-2 px-4 text-slate-700">Streaming HTTP / Audio</td>
+              <td class="py-2 px-4 text-slate-600">Reproduce la síntesis vocal y analiza la amplitud para animar párpados del robot.</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-500">Arduino D10</td>
+              <td class="py-2 px-4 font-mono font-bold text-slate-500">Pin Libre / No Conectado (NC)</td>
+              <td class="py-2 px-4"><span class="wire-badge bg-slate-100 text-slate-600">NC</span></td>
+              <td class="py-2 px-4 text-slate-500">Desconectado</td>
+              <td class="py-2 px-4 text-slate-500">Liberado. Audio transferido al smartphone inalámbrico.</td>
+            </tr>
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-500">Arduino D11</td>
+              <td class="py-2 px-4 font-mono font-bold text-slate-500">Pin Libre / No Conectado (NC)</td>
+              <td class="py-2 px-4"><span class="wire-badge bg-slate-100 text-slate-600">NC</span></td>
+              <td class="py-2 px-4 text-slate-500">Desconectado</td>
+              <td class="py-2 px-4 text-slate-500">Liberado. Audio transferido al smartphone inalámbrico.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TABLA 3: SENSORES LM75A Y DHT11 -->
     <div class="space-y-3">
       <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg inline-block border border-emerald-200">
-        2. Sensores Ambientales: LM75A (Temperatura I2C) y DHT11 (Humedad Digital)
+        3. Sensores Ambientales: LM75A (Temperatura I2C) y DHT11 (Humedad Digital)
       </h3>
       <div class="overflow-x-auto rounded-xl border border-slate-200">
         <table class="w-full text-left text-xs border-collapse">
@@ -258,9 +337,9 @@
             <tr>
               <th class="py-3 px-4 border-b">Sensor</th>
               <th class="py-3 px-4 border-b">Pin del Sensor</th>
-              <th class="py-3 px-4 border-b">Conecta a (Arduino Uno)</th>
+              <th class="py-3 px-4 border-b">Destino (Arduino Uno)</th>
               <th class="py-3 px-4 border-b">Color de Cable</th>
-              <th class="py-3 px-4 border-b">Detalle de Configuración</th>
+              <th class="py-3 px-4 border-b">Detalle de Operación</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 font-sans">
@@ -270,7 +349,7 @@
               <td class="py-2 px-4 font-mono">VCC</td>
               <td class="py-2 px-4 font-mono font-bold text-orange-600">Pin 5V de Arduino</td>
               <td class="py-2 px-4"><span class="wire-badge bg-orange-100 text-orange-800"><span class="badge-dot bg-orange-600"></span>Naranja</span></td>
-              <td class="py-2 px-4 text-slate-600">Alimentación lógica limpia desde el regulador del Arduino.</td>
+              <td class="py-2 px-4 text-slate-600">Alimentación lógica de bajo consumo (~1 mA).</td>
             </tr>
             <tr class="hover:bg-slate-50">
               <td class="py-2 px-4 font-mono">GND</td>
@@ -282,7 +361,7 @@
               <td class="py-2 px-4 font-mono">SDA</td>
               <td class="py-2 px-4 font-mono font-bold text-emerald-700">Pin A4 de Arduino</td>
               <td class="py-2 px-4"><span class="wire-badge bg-emerald-100 text-emerald-800"><span class="badge-dot bg-emerald-600"></span>Verde</span></td>
-              <td class="py-2 px-4 text-slate-600">Línea de datos I2C (Bus serie bidireccional).</td>
+              <td class="py-2 px-4 text-slate-600">Línea de datos I2C (Bus compartido con PCA9685).</td>
             </tr>
             <tr class="hover:bg-slate-50">
               <td class="py-2 px-4 font-mono">SCL</td>
@@ -294,7 +373,7 @@
               <td class="py-2 px-4 font-mono">A0, A1, A2</td>
               <td class="py-2 px-4 font-mono font-bold text-slate-800">A GND (Tierra)</td>
               <td class="py-2 px-4"><span class="wire-badge bg-slate-200 text-slate-900"><span class="badge-dot bg-slate-900"></span>Negro</span></td>
-              <td class="py-2 px-4 text-slate-600">Pines de dirección atados a 0. Fija la dirección I2C en <code class="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold">0x48</code>.</td>
+              <td class="py-2 px-4 text-slate-600">Fija la dirección I2C en <code class="bg-slate-100 px-1 py-0.5 rounded font-mono font-bold">0x48</code>.</td>
             </tr>
             <!-- DHT11 -->
             <tr class="hover:bg-slate-50 bg-slate-50/50">
@@ -302,13 +381,13 @@
               <td class="py-2 px-4 font-mono">VCC (+)</td>
               <td class="py-2 px-4 font-mono font-bold text-orange-600">Pin 5V de Arduino</td>
               <td class="py-2 px-4"><span class="wire-badge bg-orange-100 text-orange-800"><span class="badge-dot bg-orange-600"></span>Naranja</span></td>
-              <td class="py-2 px-4 text-slate-600">Alimentación lógica compartida con el LM75A.</td>
+              <td class="py-2 px-4 text-slate-600">Alimentación lógica de 5V.</td>
             </tr>
             <tr class="hover:bg-slate-50 bg-slate-50/50">
-              <td class="py-2 px-4 font-mono">DATA / OUT</td>
+              <td class="py-2 px-4 font-mono">DAT / OUT</td>
               <td class="py-2 px-4 font-mono font-bold text-purple-700">Pin D4 de Arduino</td>
               <td class="py-2 px-4"><span class="wire-badge bg-purple-100 text-purple-800"><span class="badge-dot bg-purple-600"></span>Morado</span></td>
-              <td class="py-2 px-4 text-slate-600">Bus digital propietario a 1 hilo (lecturas cada 2 segundos).</td>
+              <td class="py-2 px-4 text-slate-600">Bus digital 1-Wire propietario (muestreo cada 3 seg).</td>
             </tr>
             <tr class="hover:bg-slate-50 bg-slate-50/50">
               <td class="py-2 px-4 font-mono">GND (-)</td>
@@ -321,89 +400,50 @@
       </div>
     </div>
 
-    <!-- TABLA 3: ACTUADORES Y SERVOS -->
+    <!-- TABLA 4: ENLACE UART ESP32 <-> ARDUINO -->
     <div class="space-y-3">
-      <h3 class="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg inline-block border border-amber-200">
-        3. Actuadores Físicos: 3x Servos SG90 y LED de Iluminación
+      <h3 class="text-xs font-bold uppercase tracking-wider text-sky-700 bg-sky-50 px-3 py-1.5 rounded-lg inline-block border border-sky-200">
+        4. Enlace Serial UART (ESP32 ↔ Arduino Uno) con Divisor de Tensión
       </h3>
       <div class="overflow-x-auto rounded-xl border border-slate-200">
         <table class="w-full text-left text-xs border-collapse">
           <thead class="bg-slate-100 text-slate-700 uppercase font-mono text-[11px]">
             <tr>
-              <th class="py-3 px-4 border-b">Actuador</th>
-              <th class="py-3 px-4 border-b">Cable / Terminal</th>
-              <th class="py-3 px-4 border-b">Destino de Conexión</th>
-              <th class="py-3 px-4 border-b">Origen de Energía</th>
-              <th class="py-3 px-4 border-b">Rango Operativo / Notas</th>
+              <th class="py-3 px-4 border-b">Origen (Pin)</th>
+              <th class="py-3 px-4 border-b">Elemento Intermedio</th>
+              <th class="py-3 px-4 border-b">Destino (Pin)</th>
+              <th class="py-3 px-4 border-b">Color Cable</th>
+              <th class="py-3 px-4 border-b">Nivel Lógico / Justificación Técnica</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100 font-sans">
             <tr class="hover:bg-slate-50">
-              <td class="py-2.5 px-4 font-bold text-slate-900" rowspan="3">M1: Servo Ojos<br><span class="text-[10px] text-slate-500 font-normal">Giro horizontal de pupilas</span></td>
-              <td class="py-2 px-4 font-mono text-amber-700">Cable Naranja (Señal)</td>
-              <td class="py-2 px-4 font-mono font-bold text-indigo-700">Arduino Pin D9 (PWM)</td>
-              <td class="py-2 px-4 text-slate-500">Pulsos de 50 Hz</td>
-              <td class="py-2 px-4 text-slate-600">Rango seguro: <strong>60° a 120°</strong> (90° = mirando al frente).</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-800">ESP32 GPIO 17 (TX2)</td>
+              <td class="py-2.5 px-4 text-slate-500">Conexión directa jumper M-M</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-indigo-700">Arduino Pin D2 (RX)</td>
+              <td class="py-2.5 px-4"><span class="wire-badge bg-blue-100 text-blue-800"><span class="badge-dot bg-blue-600"></span>Azul Real</span></td>
+              <td class="py-2.5 px-4 text-slate-600"><strong>3.3V:</strong> ATmega328P reconoce &gt;3.0V como nivel HIGH válido y estable.</td>
             </tr>
             <tr class="hover:bg-slate-50">
-              <td class="py-2 px-4 font-mono text-red-700">Cable Rojo (VCC)</td>
-              <td class="py-2 px-4 font-mono font-bold text-red-700">Riel +5V Fuente Externa</td>
-              <td class="py-2 px-4 text-red-700 font-bold">Fuente Externa 5V</td>
-              <td class="py-2 px-4 text-slate-600">Corriente pico SG90: ~500 mA.</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-indigo-700">Arduino Pin D3 (TX)</td>
+              <td class="py-2.5 px-4 text-slate-700">Resistencia <strong>R1 = 1 kΩ</strong></td>
+              <td class="py-2.5 px-4 font-mono font-bold text-sky-800">Nodo Central Divisor</td>
+              <td class="py-2.5 px-4"><span class="wire-badge bg-sky-100 text-sky-800"><span class="badge-dot bg-sky-500"></span>Cian</span></td>
+              <td class="py-2.5 px-4 text-slate-600"><strong>5.0V:</strong> Nivel digital de Arduino que debe ser atenuado.</td>
             </tr>
             <tr class="hover:bg-slate-50">
-              <td class="py-2 px-4 font-mono text-slate-700">Cable Marrón (GND)</td>
-              <td class="py-2 px-4 font-mono font-bold text-slate-800">Riel GND Común</td>
-              <td class="py-2 px-4 text-slate-500">Tierra común</td>
-              <td class="py-2 px-4 text-slate-600">Unido a tierra de Arduino y ESP32.</td>
-            </tr>
-
-            <tr class="hover:bg-slate-50 bg-slate-50/50">
-              <td class="py-2.5 px-4 font-bold text-slate-900" rowspan="3">M2: Servo Párpados<br><span class="text-[10px] text-slate-500 font-normal">Apertura y parpadeo</span></td>
-              <td class="py-2 px-4 font-mono text-amber-700">Cable Naranja (Señal)</td>
-              <td class="py-2 px-4 font-mono font-bold text-indigo-700">Arduino Pin D10 (PWM)</td>
-              <td class="py-2 px-4 text-slate-500">Pulsos de 50 Hz</td>
-              <td class="py-2 px-4 text-slate-600">Rango seguro: <strong>50° (cerrado) a 100° (abierto)</strong>.</td>
-            </tr>
-            <tr class="hover:bg-slate-50 bg-slate-50/50">
-              <td class="py-2 px-4 font-mono text-red-700">Cable Rojo (VCC)</td>
-              <td class="py-2 px-4 font-mono font-bold text-red-700">Riel +5V Fuente Externa</td>
-              <td class="py-2 px-4 text-red-700 font-bold">Fuente Externa 5V</td>
-              <td class="py-2 px-4 text-slate-600">Alimentado en paralelo con M1 y M3.</td>
-            </tr>
-            <tr class="hover:bg-slate-50 bg-slate-50/50">
-              <td class="py-2 px-4 font-mono text-slate-700">Cable Marrón (GND)</td>
-              <td class="py-2 px-4 font-mono font-bold text-slate-800">Riel GND Común</td>
-              <td class="py-2 px-4 text-slate-500">Tierra común</td>
-              <td class="py-2 px-4 text-slate-600">Unido al capacitor electrolítico.</td>
-            </tr>
-
-            <tr class="hover:bg-slate-50">
-              <td class="py-2.5 px-4 font-bold text-slate-900" rowspan="3">M3: Servo Boca<br><span class="text-[10px] text-slate-500 font-normal">Mandíbula / Lip-Sync</span></td>
-              <td class="py-2 px-4 font-mono text-amber-700">Cable Naranja (Señal)</td>
-              <td class="py-2 px-4 font-mono font-bold text-indigo-700">Arduino Pin D11 (PWM)</td>
-              <td class="py-2 px-4 text-slate-500">Pulsos de 50 Hz</td>
-              <td class="py-2 px-4 text-slate-600">Rango seguro: <strong>90° (cerrada) a 130° (abierta)</strong>.</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-sky-800">Nodo Central Divisor</td>
+              <td class="py-2.5 px-4 text-slate-700">Resistencia <strong>R2 = 2 kΩ</strong> a GND</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-900">ESP32 GPIO 16 (RX2)</td>
+              <td class="py-2.5 px-4"><span class="wire-badge bg-sky-100 text-sky-800"><span class="badge-dot bg-sky-500"></span>Cian</span></td>
+              <td class="py-2.5 px-4 text-emerald-700 font-semibold"><strong>3.33V:</strong> Protege la compuerta de entrada del ESP32 contra daño por sobretensión.</td>
             </tr>
             <tr class="hover:bg-slate-50">
-              <td class="py-2 px-4 font-mono text-red-700">Cable Rojo (VCC)</td>
-              <td class="py-2 px-4 font-mono font-bold text-red-700">Riel +5V Fuente Externa</td>
-              <td class="py-2 px-4 text-red-700 font-bold">Fuente Externa 5V</td>
-              <td class="py-2 px-4 text-slate-600">Modula cada 50 ms al ritmo de la voz.</td>
-            </tr>
-            <tr class="hover:bg-slate-50">
-              <td class="py-2 px-4 font-mono text-slate-700">Cable Marrón (GND)</td>
-              <td class="py-2 px-4 font-mono font-bold text-slate-800">Riel GND Común</td>
-              <td class="py-2 px-4 text-slate-500">Tierra común</td>
-              <td class="py-2 px-4 text-slate-600">Unido a tierra común.</td>
-            </tr>
-
-            <tr class="hover:bg-slate-50 bg-emerald-50/40">
-              <td class="py-2.5 px-4 font-bold text-emerald-900">LED / Luz de Ambiente</td>
-              <td class="py-2 px-4 text-slate-700">Ánodo (+) a través de <strong>220 Ω</strong><br>Cátodo (-) directo a GND</td>
-              <td class="py-2 px-4 font-mono font-bold text-indigo-700">Arduino Pin D7</td>
-              <td class="py-2 px-4 text-slate-500">Arduino 5V Lógico</td>
-              <td class="py-2 px-4 text-slate-600">Control ON/OFF activado por orden de voz desde el celular.</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-800">ESP32 GND</td>
+              <td class="py-2.5 px-4 text-slate-500">Puente directo en riel (-)</td>
+              <td class="py-2.5 px-4 font-mono font-bold text-slate-800">Arduino GND</td>
+              <td class="py-2.5 px-4"><span class="wire-badge bg-slate-200 text-slate-900"><span class="badge-dot bg-slate-900"></span>Negro</span></td>
+              <td class="py-2.5 px-4 text-slate-600"><strong>0.0V (Tierra Común):</strong> Referencia idéntica obligatoria para evitar errores UART.</td>
             </tr>
           </tbody>
         </table>
@@ -411,69 +451,41 @@
     </div>
   </section>
 
-  <!-- SKETCH DE VERIFICACIÓN INMEDIATA LM75A + DHT11 -->
+  <!-- ESPECIFICACIONES MECÁNICAS DE WILL COGLEY (MAKERWORLD #1184807) -->
   <section class="bg-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-sm space-y-4">
     <div class="flex items-center justify-between border-b border-slate-800 pb-4">
       <div>
-        <span class="text-xs font-bold text-sky-400 uppercase tracking-wider block">Validación Rápida en Banco de Pruebas</span>
-        <h3 class="text-lg font-bold text-white mt-0.5">Sketch de Prueba para Arduino Uno (LM75A + DHT11)</h3>
+        <span class="text-xs font-bold text-sky-400 uppercase tracking-wider block">Integración Mecánica y Cinemática</span>
+        <h3 class="text-lg font-bold text-white mt-0.5">Notas de Montaje y Calibración del Mecanismo ε3.2 (Will Cogley)</h3>
       </div>
-      <span class="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full font-mono">Test_Sensores.ino</span>
+      <a href="https://makerworld.com/es/models/1184807-animatronic-eye-mechanism-e3-2#profileId-1195681" target="_blank"
+        class="text-xs bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-full font-bold transition">
+        Ver Modelo en MakerWorld #1184807 ↗
+      </a>
     </div>
-    <p class="text-xs text-slate-300 leading-relaxed">
-      Sube este sketch mínimo a tu Arduino Uno para verificar que el bus I2C detecte el <strong>LM75A en 0x48</strong> y el sensor de humedad emita lecturas correctas antes de cablear el ESP32:
-    </p>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-300 leading-relaxed">
+      <div class="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
+        <h4 class="font-bold text-sky-400">Cinemática Ocular de 2 Ejes Acoplados:</h4>
+        <p>• <strong>Eje Horizontal (M1 / CH0):</strong> Controla el giro lateral (Yaw) de ambos globos oculares mediante un enlace en paralelogramo de 4 barras. Los dos ojos se mueven sincrónicamente a izquierda y derecha.</p>
+        <p>• <strong>Eje Vertical (M2 / CH1):</strong> Una varilla vertical unida a una rótula universal (Gimbal) eleva o baja ambos ojos simultáneamente (Pitch).</p>
+        <p>• <strong>Calibración Inicial:</strong> Antes de colocar los cuernos (horns) o varillas, alimentar el PCA9685 y enviar pulso neutro de 90° (valor PWM ~300).</p>
+      </div>
 
-    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs text-emerald-400 overflow-x-auto">
-      <pre><code>#include &lt;Wire.h&gt;
-#include &lt;DHT.h&gt;
-
-#define DHTPIN 4
-#define DHTTYPE DHT11
-#define LM75_ADDR 0x48
-
-DHT dht(DHTPIN, DHTTYPE);
-
-float readLM75() {
-  Wire.beginTransmission(LM75_ADDR);
-  Wire.write(0x00); // Registro de temperatura
-  Wire.endTransmission();
-  Wire.requestFrom(LM75_ADDR, 2);
-  if (Wire.available() &gt;= 2) {
-    int16_t raw = (Wire.read() &lt;&lt; 8) | Wire.read();
-    return (raw &gt;&gt; 7) * 0.5; // Resolución de 0.5 °C
-  }
-  return -999.0;
-}
-
-void setup() {
-  Serial.begin(115200);
-  Wire.begin();
-  dht.begin();
-  Serial.println(F("--- INICIANDO PRUEBA DE SENSORES ---"));
-}
-
-void loop() {
-  float temp = readLM75();
-  float hum = dht.readHumidity();
-
-  Serial.print(F("LM75 Temp: "));
-  Serial.print(temp, 1);
-  Serial.print(F(" °C | DHT11 Humedad: "));
-  Serial.print(hum, 1);
-  Serial.println(F(" %"));
-
-  delay(2000);
-}</code></pre>
+      <div class="space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
+        <h4 class="font-bold text-emerald-400">Cinemática de 4 Párpados Independientes:</h4>
+        <p>• <strong>Párpados Superiores (M3 / CH2 y M5 / CH4):</strong> Permiten el parpadeo natural coordinado o guiños independientes (ojo izquierdo o derecho).</p>
+        <p>• <strong>Párpados Inferiores (M4 / CH3 y M6 / CH5):</strong> Se elevan sutilmente para reproducir expresiones de sonrisa (sonrisa Duchenne) o sospecha/concentración.</p>
+        <p>• <strong>Seguimiento Palpebral:</strong> En el firmware, al mirar hacia abajo en el eje vertical (CH1), los párpados superiores deben descender ligeramente para un realismo anatómico fiel.</p>
+      </div>
     </div>
   </section>
 
   <!-- FOOTER -->
   <footer class="pt-4 text-center text-xs text-slate-400 border-t border-slate-200">
-    Documentación de Hardware · Sistema Animatrónico Inteligente · 2026
+    Documentación de Hardware · Sistema Animatrónico Inteligente · Mecanismo Ocular ε3.2 (Will Cogley) · 2026
   </footer>
 
 </body>
 
 </html>
-

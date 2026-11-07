@@ -13,6 +13,7 @@ Inicia:
 
 import subprocess
 import threading
+
 import socket
 import time
 import sys
@@ -44,18 +45,21 @@ def ensure_port_available(port: int = 8000) -> bool:
 
     print(f"[*] El puerto {port} está ocupado por una instancia previa. Liberando...")
     try:
-        out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True, text=True, errors="ignore")
-        pids = set()
-        for line in out.strip().splitlines():
-            parts = line.split()
-            if len(parts) >= 5 and "LISTENING" in line.upper():
-                pids.add(parts[-1])
-        for pid in pids:
-            if pid and pid != str(os.getpid()):
-                try:
-                    subprocess.run(f"taskkill /F /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except Exception:
-                    pass
+        if sys.platform.startswith("win"):
+            out = subprocess.check_output(f"netstat -ano | findstr :{port}", shell=True, text=True, errors="ignore")
+            pids = set()
+            for line in out.strip().splitlines():
+                parts = line.split()
+                if len(parts) >= 5 and "LISTENING" in line.upper():
+                    pids.add(parts[-1])
+            for pid in pids:
+                if pid and pid != str(os.getpid()):
+                    try:
+                        subprocess.run(f"taskkill /F /PID {pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except Exception:
+                        pass
+        else:
+            subprocess.run(f"fuser -k {port}/tcp 2>/dev/null || lsof -ti:{port} | xargs kill -9 2>/dev/null", shell=True)
         time.sleep(1.0)
     except Exception:
         pass
@@ -135,12 +139,12 @@ def start_cloudflare_tunnel():
 
 def main():
     print("=" * 66)
-    print("  🤖 SERVIDOR CENTRAL · CABEZA ANIMATRÓNICA CON IA LOCAL 🎙️")
+    print("  SERVIDOR CENTRAL · ANIMATRONICO")
     print("=" * 66)
 
     # 1. Asegurar que el puerto 8000 esté libre
     if not ensure_port_available(8000):
-        print("[!] ERROR: El puerto 8000 sigue ocupado. Cierra la ventana anterior o proceso.")
+        print("[!] ERROR: El puerto 8000 sigue ocupado. Cierra el proceso anterior.")
         return
 
     print("[*] Iniciando servidor FastAPI...")
@@ -154,34 +158,30 @@ def main():
     time.sleep(1.5)
 
     print("\n[+] Servidor local activo en puerto 8000.")
-    print(f"    - IP Local: {local_url}")
+    print(f"    - URL Local: {local_url}")
 
-    print("[*] Habilitando túnel HTTPS para permisos de micrófono en teléfonos móviles...")
+    print("[*] Habilitando tunel HTTPS para acceso movil...")
     tunnel_proc, tunnel_url = start_cloudflare_tunnel()
 
     active_mobile_url = tunnel_url if tunnel_url else local_url
 
     print("\n" + "#" * 66)
-    print("  🚀 CÓMO CONECTARTE DESDE TU CELULAR (MICRÓFONO & ALTAVOZ):")
+    print("  ACCESO DESDE DISPOSITIVO MOVIL:")
     print("#" * 66)
     if tunnel_url:
-        print(f"\n  👉 ENLACE HTTPS (Recomendado para iPhone / Android):")
+        print(f"\n  Enlace HTTPS:")
         print(f"     {tunnel_url}")
-        print("\n  👉 ENLACE LOCAL (Misma red Wi-Fi):")
+        print("\n  Enlace red local:")
         print(f"     {local_url}")
     else:
-        print(f"\n  👉 Abre en el navegador de tu celular: {local_url}")
+        print(f"\n  Abre en tu navegador: {local_url}")
 
     # Imprimir código QR
     print_qr(active_mobile_url)
 
     print("\n" + "-" * 66)
-    print(" [MICRÓFONO] Habla presionando el botón central de la app móvil.")
-    print(" [ALTAVOZ]   El teléfono reproduce la voz de Dom o Loquendo.")
-    print(" [LIP-SYNC]  La mandíbula del robot se modula físicamente en vivo.")
-    print(" [ESP32]     WebSocket listo para recibir al microcontrolador.")
-    print("-" * 66)
-    print("\nPresiona CTRL+C para detener el servidor.\n")
+    print(" Presiona CTRL+C para detener el servidor.")
+    print("-" * 66 + "\n")
 
     try:
         while True:

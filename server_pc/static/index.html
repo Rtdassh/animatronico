@@ -4,53 +4,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#090d16">
+  <meta name="theme-color" content="#090c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Cíclope AI · Micrófono & Altavoz del Animatrónico</title>
-  
-  <!-- Google Fonts -->
+  <title>animatronico</title>
+
+  <!-- Google Fonts: Inter / Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-  <!-- CONTENEDOR PRINCIPAL -->
   <div class="app-container">
 
-    <!-- BARRA SUPERIOR / ESTADO DEL HARDWARE -->
+    <!-- CABECERA PRINCIPAL -->
     <header class="app-header">
       <div class="brand">
         <span class="status-pulse" id="esp32Dot"></span>
-        <div class="brand-text">
-          <h1>CÍCLOPE <span>AI</span></h1>
-          <p id="esp32StatusText">Buscando ESP32...</p>
+        <div class="brand-info">
+          <span class="brand-name">animatronico</span>
+          <span class="brand-status" id="esp32StatusText">ESP32 desconectado</span>
         </div>
       </div>
 
-      <!-- WIDGETS DE SENSORES EN VIVO -->
-      <div class="telemetry-badges">
-        <div class="badge badge-temp" id="tempBadge" title="Sensor LM75A (I2C)">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a3 3 0 016 0v6a3 3 0 01-6 0z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v10" />
+      <!-- TELEMETRÍA Y CONTROL RÁPIDO -->
+      <div class="telemetry-bar">
+        <div class="telemetry-item" id="tempBadge" title="Sensor LM75A">
+          <svg class="telemetry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v10m-3 6a3 3 0 006 0v-6a3 3 0 00-6 0v6z" />
           </svg>
           <span id="tempValue">--.- °C</span>
         </div>
 
-        <div class="badge badge-hum" id="humBadge" title="Sensor DHT11 (D4)">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <div class="telemetry-item" id="humBadge" title="Sensor DHT11">
+          <svg class="telemetry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z" />
           </svg>
           <span id="humValue">-- %</span>
         </div>
 
-        <button class="badge badge-light" id="btnToggleLight" title="Control Pin D7">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+        <button class="telemetry-item telemetry-toggle" id="btnToggleLight" title="Control Pin D7">
+          <svg class="telemetry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
           </svg>
           <span id="lightText">Luz: OFF</span>
@@ -58,43 +56,57 @@
       </div>
     </header>
 
-    <!-- BARRA DE CONFIGURACIÓN DE VOZ Y MODELO LOCAL -->
-    <div class="assistant-meta-bar">
-      <div class="model-pill" id="modelStatusPill">
-        <span class="pill-dot" id="ollamaDot"></span>
-        <span id="modelStatusText">Ollama (Qwen 2.5)...</span>
+    <!-- BARRA SECUNDARIA DE ESTADO Y VOZ -->
+    <div class="system-meta-bar">
+      <div class="model-indicator" id="modelStatusPill">
+        <span class="status-dot" id="ollamaDot"></span>
+        <span class="model-name" id="modelStatusText">Ollama</span>
       </div>
 
-      <div class="voice-picker">
-        <label for="voiceSelect">Voz:</label>
+      <div class="voice-selector">
+        <label for="voiceSelect">Voz</label>
         <select id="voiceSelect">
-          <option value="jorge" selected>Jorge (Loquendo 🇪🇸)</option>
-          <option value="carlos">Carlos (Loquendo 🇲🇽)</option>
-          <option value="carmen">Carmen (Loquendo 🇪🇸)</option>
+          <option value="jorge" selected>Jorge (Loquendo)</option>
+          <option value="carlos">Carlos (Loquendo)</option>
+          <option value="carmen">Carmen (Loquendo)</option>
         </select>
       </div>
     </div>
 
-    <!-- CARA ANIMATRÓNICA VIRTUAL (SIMULADOR EN TIEMPO REAL) -->
-    <main class="robot-face-stage">
+    <!-- MODO ASISTENTE MANOS LIBRES (WAKENET / TIPO ALEXA) -->
+    <div class="alexa-mode-bar" id="alexaModeBar">
+      <div class="alexa-mode-info">
+        <span class="alexa-pulse-dot" id="alexaDot"></span>
+        <div class="alexa-text-group">
+          <span class="alexa-mode-title" id="alexaTitle">Asistente Manos Libres</span>
+          <span class="alexa-mode-desc" id="alexaDesc">Palabra clave: "Oye Robot" / "Alexa"</span>
+        </div>
+      </div>
+      <button class="alexa-toggle-btn" id="btnToggleAlexa" title="Activar escucha continua tipo Alexa">
+        <span id="alexaBtnLabel">Iniciar Manos Libres</span>
+      </button>
+    </div>
+
+    <!-- ESCENARIO CENTRAL / CABEZA ANIMATRÓNICA -->
+    <main class="animatronic-stage">
       <div class="audio-ripple-container" id="rippleContainer">
         <div class="ripple r1"></div>
         <div class="ripple r2"></div>
-        <div class="ripple r3"></div>
       </div>
 
-      <div class="robot-avatar">
-        <!-- Ojos -->
+      <div class="animatronic-avatar">
+        <!-- Ojo animatrónico / sensor óptico -->
         <div class="eyes-socket">
           <div class="eyelid-top" id="eyelidTop"></div>
           <div class="eyeball" id="eyeball">
+            <div class="pupil-ring"></div>
             <div class="pupil" id="pupil"></div>
             <div class="eye-reflection"></div>
           </div>
           <div class="eyelid-bottom" id="eyelidBottom"></div>
         </div>
 
-        <!-- Mandíbula articulada con sonido -->
+        <!-- Mandíbula articulada con Lip-Sync -->
         <div class="jaw-container">
           <div class="jaw-upper"></div>
           <div class="jaw-lower" id="jawLower">
@@ -103,90 +115,86 @@
         </div>
       </div>
 
-      <!-- VISUALIZADOR DE ONDAS DE VOZ -->
+      <!-- ONDA DE AUDIO -->
       <div class="waveform-box" id="waveformBox">
         <canvas id="waveformCanvas"></canvas>
       </div>
 
-      <!-- TEXTO DE ESTADO / DIÁLOGO -->
+      <!-- ESTADO Y SALIDA DE TEXTO -->
       <div class="dialogue-box">
-        <p class="status-caption" id="statusCaption">Toca el micrófono para hablar</p>
-        <p class="sub-caption" id="subCaption">Tu celular funcionará como el micrófono y la bocina de Loquendo</p>
-        
-        <!-- BOTÓN DE REPRODUCCIÓN RÁPIDA -->
+        <p class="status-caption" id="statusCaption">Listo para escuchar</p>
+        <p class="sub-caption" id="subCaption"></p>
+
         <div class="replay-audio-container" id="replayAudioContainer" style="display: none;">
-          <button class="btn-replay-loquendo" id="btnReplayAudio">
-            🔊 Escuchar respuesta de Loquendo
+          <button class="btn-replay" id="btnReplayAudio">
+            Reproducir respuesta
           </button>
         </div>
       </div>
     </main>
 
-    <!-- CHIPS DE ACCIÓN RÁPIDA -->
+    <!-- ACCIONES RÁPIDAS (CHIPS) -->
     <div class="quick-chips-wrapper">
       <div class="quick-chips">
-        <button class="chip" data-prompt="¿Qué temperatura y humedad hay en el laboratorio?">🌡️ Temperatura y Humedad</button>
-        <button class="chip" data-prompt="Enciende la luz del laboratorio">💡 Enciende la luz</button>
-        <button class="chip" data-prompt="Apaga la luz del laboratorio">🌑 Apaga la luz</button>
-        <button class="chip" data-prompt="¿Quién eres y qué puedes hacer?">🤖 ¿Quién eres?</button>
-        <button class="chip" data-prompt="Cuéntame un chiste robótico al estilo Loquendo">🎭 Cuéntame un chiste</button>
+        <button class="chip" data-prompt="¿Qué temperatura y humedad hay en el laboratorio?">Sensores</button>
+        <button class="chip" data-prompt="Enciende la luz del laboratorio">Encender luz</button>
+        <button class="chip" data-prompt="Apaga la luz del laboratorio">Apagar luz</button>
+        <button class="chip" data-prompt="¿Quién eres y qué puedes hacer?">Identificación</button>
+        <button class="chip" data-prompt="Haz un parpadeo de prueba">Parpadeo</button>
       </div>
     </div>
 
-    <!-- ZONA DE CONTROL INFERIOR (MICRÓFONO PRINCIPAL) -->
+    <!-- ZONA INFERIOR / ENTRADA Y MICRÓFONO -->
     <footer class="controls-footer">
       <div class="mic-button-wrapper">
-        <button class="mic-button" id="btnMic" aria-label="Hablar al animatrónico">
-          <div class="mic-glow"></div>
+        <button class="mic-button" id="btnMic" aria-label="Activar micrófono">
           <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
           </svg>
         </button>
       </div>
 
-      <!-- ENTRADA DE TEXTO ALTERNATIVA -->
       <div class="text-input-bar">
-        <input type="text" id="inputQuery" placeholder="O escribe tu mensaje aquí..." autocomplete="off">
-        <button id="btnSendText" aria-label="Enviar texto">
+        <input type="text" id="inputQuery" placeholder="Escribe un comando o mensaje..." autocomplete="off">
+        <button id="btnSendText" aria-label="Enviar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14m-7-7l7 7-7 7" />
           </svg>
         </button>
-        <button id="btnToggleManual" class="btn-settings" title="Calibración manual de servos">
+        <button id="btnToggleManual" class="btn-settings" title="Calibración de servos" aria-label="Ajustes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
         </button>
       </div>
 
-      <!-- PANEL DESPLEGABLE DE CALIBRACIÓN MANUAL DE SERVOS -->
+      <!-- PANEL DE CALIBRACIÓN DE SERVOS -->
       <div class="manual-panel" id="manualPanel">
         <div class="manual-header">
-          <h3>Prueba de Movimiento Físico (Servos SG90)</h3>
-          <button id="btnCloseManual">&times;</button>
+          <h3>Calibración de servos</h3>
+          <button id="btnCloseManual" aria-label="Cerrar">&times;</button>
         </div>
-        
+
         <div class="slider-row">
-          <label>Mandíbula: <span id="valMouth">90°</span></label>
+          <label>Mandíbula <span class="slider-val" id="valMouth">90°</span></label>
           <input type="range" id="sliderMouth" min="90" max="130" value="90">
         </div>
 
         <div class="slider-row">
-          <label>Ojos: <span id="valEyes">90°</span></label>
+          <label>Ojos <span class="slider-val" id="valEyes">90°</span></label>
           <input type="range" id="sliderEyes" min="60" max="120" value="90">
         </div>
 
         <div class="manual-actions">
-          <button id="btnTriggerBlink">Forzar Parpadeo</button>
-          <button id="btnCenterAll">Centrar Todos a 90°</button>
+          <button id="btnTriggerBlink">Parpadear</button>
+          <button id="btnCenterAll">Centrar (90°)</button>
         </div>
       </div>
     </footer>
 
   </div>
 
-  <!-- ELEMENTO DE AUDIO OCULTO PARA EL ALTAVOZ DEL CELULAR -->
+  <!-- ELEMENTO DE AUDIO PARA REPRODUCCIÓN -->
   <audio id="audioPlayer" preload="auto" playsinline></audio>
 
   <script src="app.js"></script>
