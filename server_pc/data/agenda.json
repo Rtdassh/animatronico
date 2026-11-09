@@ -1,0 +1,23 @@
+[
+  {
+    "id": "item_1",
+    "title": "Calibración de la mirada y mecanismo ocular de precisión",
+    "date": "2026-11-08",
+    "time": "10:00",
+    "category": "sistema"
+  },
+  {
+    "id": "item_2",
+    "title": "Audiencia vespertina con mi estimado interlocutor",
+    "date": "2026-11-08",
+    "time": "18:00",
+    "category": "reunión"
+  },
+  {
+    "id": "item_3",
+    "title": "Inspección de ideales y lectura de literatura libertaria",
+    "date": "2026-11-09",
+    "time": "15:30",
+    "category": "misión"
+  }
+]

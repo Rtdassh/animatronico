@@ -24,7 +24,6 @@ const char* WIFI_SSID     = "TU_RED_WIFI";
 const char* WIFI_PASSWORD = "TU_PASSWORD";
 
 // Dirección IP local de la computadora (donde corre el servidor en Python):
-// Puedes consultarla abriendo una terminal en la PC y ejecutando 'ipconfig'.
 const char* PC_SERVER_IP  = "192.168.1.15";
 const uint16_t PC_PORT    = 8000;
 const char* WS_PATH       = "/ws/animatronic";
@@ -36,8 +35,8 @@ const char* WS_PATH       = "/ws/animatronic";
 #define PIN_UART2_TX  17  // Envía comandos hacia Arduino D2 (3.3V nativo)
 #define PIN_STATUS_LED 2  // LED azul integrado en placa
 
-// Tasa de baudios con el Arduino (SoftwareSerial en D2/D3 es óptimo a 9600)
-#define UART2_BAUD_RATE 9600
+// Tasa de baudios optimizada con el Arduino Uno (38400 bps: 4x ancho de banda y 0.16% error)
+#define UART2_BAUD_RATE 38400
 
 // ----------------------------------------------------------------------------
 // OBJETOS Y VARIABLES GLOBALES
@@ -47,7 +46,10 @@ HardwareSerial ArduinoSerial(2); // Usar hardware UART2 del ESP32
 
 String uartBuffer = "";
 bool isWebSocketConnected = false;
-unsigned long lastHeartbeatTime = 0;
+
+// Buffer Latest-Command-Wins no bloqueante para evitar desbordamiento del FIFO UART
+String pendingCommand = "";
+bool hasPendingCommand = false;
 
 // ============================================================================
 // MANEJADOR DE EVENTOS WEBSOCKET (CALLBACK)
@@ -72,15 +74,17 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
     case WStype_TEXT:
       {
-        // Llegó un comando de movimiento o luz desde la PC
         String command = String((char*)payload);
         command.trim();
 
-        Serial.print(F("[WS <- PC] Comado recibido: "));
-        Serial.println(command);
-
-        // Reenviar de inmediato por puerto serie al Arduino Uno
-        ArduinoSerial.println(command);
+        // Política Latest-Command-Wins para comandos cinemáticos continuos
+        if (command.startsWith("CMD:")) {
+          pendingCommand = command;
+          hasPendingCommand = true;
+        } else {
+          // Comandos discretos o no continuos: enviar directamente
+          ArduinoSerial.println(command);
+        }
       }
       break;
 
@@ -138,13 +142,14 @@ void setup() {
   pinMode(PIN_STATUS_LED, OUTPUT);
   digitalWrite(PIN_STATUS_LED, LOW);
 
-  // Inicializar Hardware UART2 para comunicación con Arduino Uno
-  // Parámetros: Baud, Config, RX Pin, TX Pin
+  // Inicializar Hardware UART2 para comunicación de alta velocidad con Arduino Uno
+  // 38400 baudios: 4x ancho de banda frente a 9600 bps originales
   ArduinoSerial.begin(UART2_BAUD_RATE, SERIAL_8N1, PIN_UART2_RX, PIN_UART2_TX);
 
   Serial.println(F("=================================================="));
   Serial.println(F(" ESP32 DevKit V1: Pasarela Wi-Fi WebSocket <-> UART2 "));
   Serial.println(F(" Hardware UART2: GPIO 16 (RX2), GPIO 17 (TX2)     "));
+  Serial.println(F(" Baudrate: 38400 bps (Optimizado Latest-Frame)    "));
   Serial.println(F("=================================================="));
 
   // Conectar a la red inalámbrica
@@ -164,26 +169,29 @@ void setup() {
 }
 
 // ============================================================================
-// LOOP PRINCIPAL (No bloqueante)
+// LOOP PRINCIPAL (No bloqueante, alta prioridad)
 // ============================================================================
 
 void loop() {
-  // Mantener la pila de red y el protocolo WebSocket activos
+  // 1. Mantener la pila de red y el protocolo WebSocket activos con máxima prioridad
   webSocket.loop();
 
-  // 1. Verificar si hay datos que provienen del Arduino (Telemetría de sensores)
+  // 2. Transmisión no bloqueante hacia Arduino Uno con buffer Latest-Command-Wins
+  if (hasPendingCommand) {
+    if (ArduinoSerial.availableForWrite() >= (int)(pendingCommand.length() + 2)) {
+      ArduinoSerial.println(pendingCommand);
+      hasPendingCommand = false;
+    }
+  }
+
+  // 3. Verificar si hay datos que provienen del Arduino (Telemetría de sensores)
   while (ArduinoSerial.available() > 0) {
     char c = ArduinoSerial.read();
     if (c == '\n' || c == '\r') {
       if (uartBuffer.length() > 0) {
-        // Ejemplo de trama que llega: SENS:T=24.5,H=60.0
-        Serial.print(F("[UART <- ARDUINO] "));
-        Serial.println(uartBuffer);
-
         // Si estamos conectados por WebSocket a la PC, enviar de inmediato
         if (isWebSocketConnected) {
           webSocket.sendTXT(uartBuffer);
-          Serial.println(F("[WS -> PC] Telemetría enviada a la PC."));
         }
         uartBuffer = "";
       }
@@ -194,7 +202,7 @@ void loop() {
     }
   }
 
-  // 2. Reconexión Wi-Fi automática si se pierde la señal
+  // 4. Reconexión Wi-Fi automática si se pierde la señal
   if (WiFi.status() != WL_CONNECTED) {
     static unsigned long lastWiFiCheck = 0;
     if (millis() - lastWiFiCheck > 10000) {
@@ -204,4 +212,3 @@ void loop() {
     }
   }
 }
-

@@ -28,7 +28,6 @@
  *   - Canal 4  : M5 · Párpado Superior Derecho (45° cerrado a 100° abierto)
  *   - Canal 5  : M6 · Párpado Inferior Derecho (80° reposo a 110° elevado)
  *   - Canales 6-15 : Libres para expansión futura
- *   * NOTA: Audio e interactividad estilo Alexa gestionados por Smartphone manos libres.
  * ============================================================================
  */
 
@@ -44,7 +43,6 @@
 #define PIN_SW_TX          3
 #define PIN_DHT            4
 #define PIN_LED            7
-// Pines D10 y D11 quedan libres (audio y altavoz transferidos al Smartphone)
 
 #define DHTTYPE DHT11
 #define LM75_ADDR 0x48
@@ -79,9 +77,12 @@ const int LID_BOT_REST    = 80;
 const int LID_BOT_SQUINT  = 105;
 
 // Temporizaciones asíncronas (millis)
-const unsigned long TELEMETRY_INTERVAL_MS = 3000; // Enviar clima cada 3 seg
+const unsigned long TELEMETRY_INTERVAL_MS = 3500; // Enviar telemetría espaciada cada 3.5s
 const unsigned long BLINK_DURATION_MS     = 140;  // Duración párpado cerrado
 const unsigned long IDLE_SACCADE_TIMEOUT  = 6500; // Miradas aleatorias si no hay comandos
+
+// Tasa de baudios optimizada para SoftwareSerial (38400 bps)
+#define SW_SERIAL_BAUD 38400
 
 // ----------------------------------------------------------------------------
 // INSTANCIAS DE OBJETOS
@@ -111,9 +112,6 @@ int currentEyeVPos = EYE_V_NEUTRAL;
 // FUNCIONES AUXILIARES DE CONVERSIÓN DE ÁNGULO A PULSO PCA9685
 // ============================================================================
 
-/**
- * Convierte un ángulo en grados (0° a 180°) en cuentas de 12 bits para el PCA9685.
- */
 int angleToPulse(int angle) {
   angle = constrain(angle, 0, 180);
   return map(angle, 0, 180, SERVOMIN, SERVOMAX);
@@ -160,30 +158,27 @@ void sendTelemetry() {
 
   String packet = "SENS:T=" + String(temp, 1) + ",H=" + String(hum, 1);
   espSerial.println(packet);
-
-  Serial.print(F("[ARDUINO TX -> ESP32] "));
-  Serial.println(packet);
 }
 
 // ============================================================================
-// PARSER DE COMANDOS DESDE EL ESP32 / PC
+// PARSER DE COMANDOS DESDE EL ESP32 / PC (Tolerante a ruido)
 // ============================================================================
 
 /**
- * Procesa la trama recibida en formato: CMD:E=90,EV=90,B=0,L=1,A=1
- * Parámetros:
- *   E  o EH : Ojos Horizontal (60 - 120)
- *   EV      : Ojos Vertical (70 - 110)
- *   B       : Forzar Parpadeo (1 = sí, 0 = no)
- *   L       : Luz / LED (1 = encendido, 0 = apagado)
- *   A       : Pista de Audio (ID opcional para DFPlayer Mini)
+ * Procesa la trama recibida en formato: CMD:EH=90,EV=90,B=0,L=1
+ * Parámetros soportados:
+ *   E o EH : Ojos Horizontal (60 - 120)
+ *   EV     : Ojos Vertical (70 - 110)
+ *   B      : Forzar Parpadeo (1 = sí, 0 = no)
+ *   L      : Luz / LED (1 = encendido, 0 = apagado)
  */
 void processCommand(String cmd) {
   cmd.trim();
-  if (!cmd.startsWith("CMD:")) return;
+  int cmdIdx = cmd.indexOf("CMD:");
+  if (cmdIdx == -1) return; // Si no contiene cabecera válida, ignorar
 
   lastCommandTime = millis();
-  String params = cmd.substring(4);
+  String params = cmd.substring(cmdIdx + 4);
 
   int eyeHVal  = currentEyeHPos;
   int eyeVVal  = currentEyeVPos;
@@ -211,10 +206,14 @@ void processCommand(String cmd) {
   }
 
   // 1. Aplicar posición de Ojos Horizontal (CH0) y Vertical (CH1) en PCA9685
-  currentEyeHPos = constrain(eyeHVal, EYE_H_MIN, EYE_H_MAX);
-  currentEyeVPos = constrain(eyeVVal, EYE_V_MIN, EYE_V_MAX);
-  setServoAngle(PCA_CH_EYE_H, currentEyeHPos);
-  setServoAngle(PCA_CH_EYE_V, currentEyeVPos);
+  int newH = constrain(eyeHVal, EYE_H_MIN, EYE_H_MAX);
+  int newV = constrain(eyeVVal, EYE_V_MIN, EYE_V_MAX);
+  if (newH != currentEyeHPos || newV != currentEyeVPos) {
+    currentEyeHPos = newH;
+    currentEyeVPos = newV;
+    setServoAngle(PCA_CH_EYE_H, currentEyeHPos);
+    setServoAngle(PCA_CH_EYE_V, currentEyeVPos);
+  }
 
   // 2. Forzar parpadeo coordinado ε3.2 en canales CH2-CH5
   if (blinkVal == 1 && !isBlinking) {
@@ -229,13 +228,6 @@ void processCommand(String cmd) {
   } else if (lightVal == 0) {
     digitalWrite(PIN_LED, LOW);
   }
-
-  Serial.print(F("[CMD APLICADO] EH="));
-  Serial.print(currentEyeHPos);
-  Serial.print(F(" EV="));
-  Serial.print(currentEyeVPos);
-  Serial.print(F(" L="));
-  Serial.println(digitalRead(PIN_LED));
 }
 
 // ============================================================================
@@ -278,7 +270,8 @@ void updateAutonomy() {
 
 void setup() {
   Serial.begin(115200);
-  espSerial.begin(9600);
+  // SoftwareSerial a 38400 baudios (4x más rápido que 9600 bps original)
+  espSerial.begin(SW_SERIAL_BAUD);
 
   Wire.begin();
   dht.begin();
@@ -303,10 +296,7 @@ void setup() {
   Serial.println(F("=================================================="));
   Serial.println(F(" Arduino Uno R3: Mecanismo Ocular ε3.2 + PCA9685 "));
   Serial.println(F(" PCA9685 I2C (0x40): CH0-CH5 para 6 Servos Ojos  "));
-  Serial.println(F(" Audio: Smartphone Manos Libres (Microfono/Altavoz)"));
-  Serial.println(F(" Sensores: LM75A (I2C: 0x48) | DHT11 (Pin D4)    "));
-  Serial.println(F(" SoftwareSerial ESP32: D2 (RX), D3 (TX)          "));
-  Serial.println(F(" Pines D10/D11: Libres para futura expansion     "));
+  Serial.println(F(" SoftwareSerial ESP32: D2 (RX), D3 (TX) @ 38400bps"));
   Serial.println(F("=================================================="));
 }
 

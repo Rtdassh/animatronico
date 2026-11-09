@@ -7,12 +7,14 @@
   <meta name="theme-color" content="#090c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>animatronico</title>
+  <title>V de Venganza · Asistente Animatrónico</title>
 
   <!-- Google Fonts: Inter / Plus Jakarta Sans & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
 </head>
@@ -26,7 +28,7 @@
       <div class="brand">
         <span class="status-pulse" id="esp32Dot"></span>
         <div class="brand-info">
-          <span class="brand-name">animatronico</span>
+          <span class="brand-name">V de Venganza</span>
           <span class="brand-status" id="esp32StatusText">ESP32 desconectado</span>
         </div>
       </div>
@@ -35,21 +37,24 @@
       <div class="telemetry-bar">
         <div class="telemetry-item" id="tempBadge" title="Sensor LM75A">
           <svg class="telemetry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v10m-3 6a3 3 0 006 0v-6a3 3 0 00-6 0v6z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 3v10m-3 6a3 3 0 006 0v-6a3 3 0 00-6 0v6z" />
           </svg>
           <span id="tempValue">--.- °C</span>
         </div>
 
         <div class="telemetry-item" id="humBadge" title="Sensor DHT11">
           <svg class="telemetry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z" />
           </svg>
           <span id="humValue">-- %</span>
         </div>
 
         <button class="telemetry-item telemetry-toggle" id="btnToggleLight" title="Control Pin D7">
           <svg class="telemetry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
           </svg>
           <span id="lightText">Luz: OFF</span>
         </button>
@@ -66,10 +71,24 @@
       <div class="voice-selector">
         <label for="voiceSelect">Voz</label>
         <select id="voiceSelect">
-          <option value="jorge" selected>Jorge (Loquendo)</option>
-          <option value="carlos">Carlos (Loquendo)</option>
-          <option value="carmen">Carmen (Loquendo)</option>
+          <option value="jorge" selected>Jorge (España - Loquendo Clásico)</option>
+          <option value="carlos">Carlos (Latinoamérica - Loquendo)</option>
+          <option value="carmen">Carmen (España - Loquendo)</option>
+          <option value="diego">Diego (Argentina - Loquendo)</option>
+          <option value="esperanza">Esperanza (México - Loquendo)</option>
+          <option value="juan">Juan (España - Voz Grave Narrador)</option>
+          <option value="francisca">Francisca (Chile - Loquendo)</option>
+          <option value="daniel">Daniel (UK - Meme MLG / Moonbase)</option>
+          <option value="dave">Dave (US - Loquendo)</option>
+          <option value="felipe">Felipe (Brasil - Português)</option>
         </select>
+      </div>
+
+      <div class="bgm-control">
+        <button class="btn-bgm-toggle active" id="btnToggleBgm" title="Música clásica de Loquendo de fondo">
+          <span class="bgm-icon">🎵</span>
+          <span id="bgmLabel">Música ON</span>
+        </button>
       </div>
     </div>
 
@@ -78,13 +97,58 @@
       <div class="alexa-mode-info">
         <span class="alexa-pulse-dot" id="alexaDot"></span>
         <div class="alexa-text-group">
-          <span class="alexa-mode-title" id="alexaTitle">Asistente Manos Libres</span>
-          <span class="alexa-mode-desc" id="alexaDesc">Palabra clave: "Oye Robot" / "Alexa"</span>
+          <span class="alexa-mode-title" id="alexaTitle">Invocación Manos Libres</span>
+          <span class="alexa-mode-desc" id="alexaDesc">Comando: "Oye V" / "Oye Uve"</span>
         </div>
       </div>
-      <button class="alexa-toggle-btn" id="btnToggleAlexa" title="Activar escucha continua tipo Alexa">
+      <button class="alexa-toggle-btn" id="btnToggleAlexa" title="Activar escucha continua de V de Venganza">
         <span id="alexaBtnLabel">Iniciar Manos Libres</span>
       </button>
+    </div>
+
+    <!-- MODO VISIÓN ARTIFICIAL (SEGUIMIENTO FACIAL) -->
+    <div class="vision-mode-bar" id="visionModeBar">
+      <div class="vision-mode-info">
+        <span class="vision-pulse-dot" id="visionDot"></span>
+        <div class="vision-text-group">
+          <div class="vision-title-row">
+            <span class="vision-mode-title" id="visionTitle">Visión Artificial</span>
+            <span class="vision-badge" id="visionBadge">OFF</span>
+          </div>
+          <span class="vision-mode-desc" id="visionAngles">PAN: 90° | TILT: 90°</span>
+        </div>
+      </div>
+      <div class="vision-btn-group">
+        <button class="vision-preview-btn" id="btnTogglePreview" title="Mostrar/ocultar cámara en vivo">
+          <span id="previewBtnLabel">📷 Cámara</span>
+        </button>
+        <button class="vision-toggle-btn" id="btnToggleVision" title="Activar/desactivar seguimiento facial">
+          <span id="visionBtnLabel">Iniciar Visión</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- TARJETA DESPLEGABLE DE VIDEO EN VIVO -->
+    <div class="vision-preview-card" id="visionPreviewCard" style="display: none;">
+      <div class="vision-video-wrapper">
+        <img id="visionFeedImg" alt="Cámara de visión por computadora" />
+        <div class="vision-feed-overlay" id="visionFeedOverlay">
+          <span id="feedFpsText">FPS: --</span>
+          <span id="feedStatusText">INACTIVO</span>
+        </div>
+      </div>
+      <div class="vision-controls-row">
+        <label class="vision-chk-label">
+          <input type="checkbox" id="chkInvertX" checked> Espejo (X)
+        </label>
+        <label class="vision-chk-label">
+          <input type="checkbox" id="chkInvertY"> Invertir Y
+        </label>
+        <div class="vision-smooth-group">
+          <span>Suavizado:</span>
+          <input type="range" id="sliderSmooth" min="0.10" max="0.50" step="0.05" value="0.25">
+        </div>
+      </div>
     </div>
 
     <!-- ESCENARIO CENTRAL / CABEZA ANIMATRÓNICA -->
@@ -136,10 +200,13 @@
     <!-- ACCIONES RÁPIDAS (CHIPS) -->
     <div class="quick-chips-wrapper">
       <div class="quick-chips">
-        <button class="chip" data-prompt="¿Qué temperatura y humedad hay en el laboratorio?">Sensores</button>
+        <button class="chip" data-prompt="¿Quién eres y cuál es tu propósito?">Identidad de V</button>
+        <button class="chip" data-prompt="Pásame el link del tutorial en la descripción">Link Mediafire XD</button>
+        <button class="chip" data-prompt="¿Qué viste en las sombras del laboratorio?">No le di importancia</button>
+        <button class="chip" data-prompt="¿Qué fecha y hora tenemos hoy?">Fecha y Hora</button>
+        <button class="chip" data-prompt="¿Qué compromisos tengo en mi agenda hoy?">Mi Agenda</button>
         <button class="chip" data-prompt="Enciende la luz del laboratorio">Encender luz</button>
         <button class="chip" data-prompt="Apaga la luz del laboratorio">Apagar luz</button>
-        <button class="chip" data-prompt="¿Quién eres y qué puedes hacer?">Identificación</button>
         <button class="chip" data-prompt="Haz un parpadeo de prueba">Parpadeo</button>
       </div>
     </div>
@@ -149,7 +216,8 @@
       <div class="mic-button-wrapper">
         <button class="mic-button" id="btnMic" aria-label="Activar micrófono">
           <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
           </svg>
         </button>
       </div>
@@ -163,7 +231,8 @@
         </button>
         <button id="btnToggleManual" class="btn-settings" title="Calibración de servos" aria-label="Ajustes">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
           </svg>
         </button>
       </div>
@@ -181,8 +250,18 @@
         </div>
 
         <div class="slider-row">
-          <label>Ojos <span class="slider-val" id="valEyes">90°</span></label>
+          <label>Ojos Pan (Horizontal) <span class="slider-val" id="valEyes">90°</span></label>
           <input type="range" id="sliderEyes" min="60" max="120" value="90">
+        </div>
+
+        <div class="slider-row">
+          <label>Ojos Tilt (Vertical) <span class="slider-val" id="valEyesV">90°</span></label>
+          <input type="range" id="sliderEyesV" min="70" max="110" value="90">
+        </div>
+
+        <div class="slider-row">
+          <label>Música Loquendo <span class="slider-val" id="valBgmVol">15%</span></label>
+          <input type="range" id="sliderBgmVol" min="0" max="40" value="15">
         </div>
 
         <div class="manual-actions">
@@ -194,8 +273,11 @@
 
   </div>
 
-  <!-- ELEMENTO DE AUDIO PARA REPRODUCCIÓN -->
+  <!-- ELEMENTO DE AUDIO PARA REPRODUCCIÓN DE VOZ -->
   <audio id="audioPlayer" preload="auto" playsinline></audio>
+
+  <!-- ELEMENTO DE AUDIO PARA MÚSICA DE FONDO LOQUENDO -->
+  <audio id="loquendoBgm" preload="auto" playsinline loop src="/audio/musica_loquendo.mp4"></audio>
 
   <script src="app.js"></script>
 </body>

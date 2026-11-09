@@ -9,24 +9,89 @@ BASE_DIR = Path(__file__).resolve().parent
 AUDIO_DIR = BASE_DIR / "audio"
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
+# Sesión HTTP persistente con pool de conexiones
+_session = requests.Session()
+_adapter = requests.adapters.HTTPAdapter(pool_connections=5, pool_maxsize=10, max_retries=1)
+_session.mount("http://", _adapter)
+_session.mount("https://", _adapter)
+
 VOICES = {
+    # --- Voces Loquendo Clásicas en Español (Engine 2) ---
     "jorge": {
-        "name": "Jorge (España)",
+        "name": "Jorge (España - Loquendo Clásico)",
         "engine": 2,
         "voice": 6,
         "language": 2
     },
     "carlos": {
-        "name": "Carlos (Latinoamérica)",
+        "name": "Carlos (Latinoamérica - Loquendo)",
         "engine": 2,
-        "voice": 1,
-        "language": 14
+        "voice": 7,
+        "language": 2
     },
     "carmen": {
-        "name": "Carmen (España)",
+        "name": "Carmen (España - Loquendo)",
+        "engine": 2,
+        "voice": 1,
+        "language": 2
+    },
+    "diego": {
+        "name": "Diego (Argentina - Loquendo)",
+        "engine": 2,
+        "voice": 4,
+        "language": 2
+    },
+    "esperanza": {
+        "name": "Esperanza (México - Loquendo)",
         "engine": 2,
         "voice": 5,
         "language": 2
+    },
+    "juan": {
+        "name": "Juan (España - Voz Grave Narrador)",
+        "engine": 2,
+        "voice": 2,
+        "language": 2
+    },
+    "francisca": {
+        "name": "Francisca (Chile - Loquendo)",
+        "engine": 2,
+        "voice": 3,
+        "language": 2
+    },
+    "soledad": {
+        "name": "Soledad (Latinoamérica)",
+        "engine": 2,
+        "voice": 8,
+        "language": 2
+    },
+    "ximena": {
+        "name": "Ximena (Latinoamérica)",
+        "engine": 2,
+        "voice": 10,
+        "language": 2
+    },
+
+    # --- Voces Íconicas de Internet / Memes Virales ---
+    "daniel": {
+        "name": "Daniel (UK - Meme MLG / Moonbase)",
+        "engine": 4,
+        "voice": 5,
+        "language": 1
+    },
+    "dave": {
+        "name": "Dave (US - Loquendo)",
+        "engine": 2,
+        "voice": 2,
+        "language": 1
+    },
+
+    # --- Voz en Portugués (debidamente etiquetada) ---
+    "felipe": {
+        "name": "Felipe (Brasil - Português)",
+        "engine": 2,
+        "voice": 1,
+        "language": 14
     }
 }
 
@@ -58,7 +123,7 @@ def get_chunk_audio(text: str, engine: int, voice: int, language: int) -> bytes:
         'Referer': 'https://www.oddcast.com/'
     }
     
-    response = requests.get(url, headers=headers, timeout=20)
+    response = _session.get(url, headers=headers, timeout=20)
     if response.status_code == 200 and len(response.content) > 500:
         return response.content
     raise RuntimeError(f"Error al sintetizar fragmento (Status {response.status_code}, tamaño {len(response.content)})")

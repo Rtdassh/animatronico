@@ -8,3 +8,5 @@ pydub>=0.25.1
 pydantic>=2.0.0
 qrcode>=7.4.2
 colorama>=0.4.6
+opencv-python>=4.10.0
+numpy>=1.26.0
