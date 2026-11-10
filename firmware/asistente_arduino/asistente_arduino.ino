@@ -36,6 +36,7 @@ bool automatico = false;
 
 int temp10 = -32768, hum10 = -1;
 int servo0 = 90, servo1 = 90;
+int servoAngles[16] = {90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90, 90};
 uint16_t dhtErrors = 0, serialErrors = 0;
 uint8_t dhtErrorCode = 0; // 1=inicio, 2/3=respuesta, 4/5=datos, 6=checksum, 7=rango
 
@@ -169,8 +170,14 @@ bool pcaStart() {
   if (!i2cRegWrite(pcaAddr, 0x00, 0x20)) return false;
   delay(5);
   if (!i2cRegWrite(pcaAddr, 0x00, 0xA0)) return false;
-  return pcaSetAngle(0, servo0) && pcaSetAngle(1, servo1);
+
+  bool allOk = true;
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if (!pcaSetAngle(ch, servoAngles[ch])) allOk = false;
+  }
+  return allOk;
 }
+
 
 bool lcdExpander(uint8_t value) {
   if (!lcdAddr) return false;
@@ -309,9 +316,9 @@ void processCommand(char *cmd) {
     sendStatus();
     return;
   }
-  if ((cmd[0] == 'S') && (cmd[1] == '0' || cmd[1] == '1') && cmd[2] == ':') {
+  if (strncmp(cmd, "S_ALL:", 6) == 0) {
     char *end;
-    long angle = strtol(cmd + 3, &end, 10);
+    long angle = strtol(cmd + 6, &end, 10);
     if (*end || angle < 30 || angle > 150) {
       ack("ANGULO_INVALIDO");
       return;
@@ -320,17 +327,47 @@ void processCommand(char *cmd) {
       ack("PCA_NO_DETECTADO");
       return;
     }
-    uint8_t channel = cmd[1] - '0';
-    bool ok = pcaSetAngle(channel, (int)angle);
-    if (ok) {
-      if (channel == 0) servo0 = angle;
-      else servo1 = angle;
+    for (uint8_t ch = 0; ch < 16; ++ch) {
+      pcaSetAngle(ch, (int)angle);
+      servoAngles[ch] = (int)angle;
     }
-    pcaOK = ok;
-    ack(ok ? "PWM_ENVIADO" : "PCA_ERROR");
+    servo0 = (int)angle;
+    servo1 = (int)angle;
+    ack("ALL_PWM_OK");
     sendStatus();
     return;
   }
+
+  if (cmd[0] == 'S') {
+    char *colon = strchr(cmd, ':');
+    if (colon != NULL) {
+      char *endCh;
+      long channel = strtol(cmd + 1, &endCh, 10);
+      if (endCh == colon && channel >= 0 && channel <= 15) {
+        char *endAng;
+        long angle = strtol(colon + 1, &endAng, 10);
+        if (*endAng || angle < 30 || angle > 150) {
+          ack("ANGULO_INVALIDO");
+          return;
+        }
+        if (!pcaAddr) {
+          ack("PCA_NO_DETECTADO");
+          return;
+        }
+        bool ok = pcaSetAngle((uint8_t)channel, (int)angle);
+        if (ok) {
+          servoAngles[channel] = (int)angle;
+          if (channel == 0) servo0 = (int)angle;
+          else if (channel == 1) servo1 = (int)angle;
+        }
+        pcaOK = ok;
+        ack(ok ? "PWM_ENVIADO" : "PCA_ERROR");
+        sendStatus();
+        return;
+      }
+    }
+  }
+
   ++serialErrors;
   ack("COMANDO_INVALIDO");
 }
