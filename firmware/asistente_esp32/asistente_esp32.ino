@@ -73,6 +73,7 @@ void parseLine(char *line) {
   gotFrame = true;
   Serial.print(F("TELEMETRIA UNO: "));
   Serial.println(line);
+  Serial.println(line);
 }
 
 void readUART() {
@@ -190,8 +191,69 @@ void setup() {
   Serial.println(F("[OK] Servidor Web HTTP activo en puerto 80"));
 }
 
+char usbLine[128];
+uint8_t usbLen = 0;
+unsigned long lastSerialHeartbeat = 0;
+
+void readUSBSerial() {
+  while (Serial.available()) {
+    char c = (char)Serial.read();
+    if (c == '\r') continue;
+    if (c == '\n') {
+      usbLine[usbLen] = 0;
+      if (usbLen > 0) {
+        String cmd = String(usbLine);
+        cmd.trim();
+        if (cmd == "PING") {
+          Serial.println(F("PONG"));
+          uartLink.println(F("PING"));
+        } else if (cmd == "STATUS") {
+          readUART();
+          bool alive = gotFrame && (millis() - lastFrame < 6000);
+          Serial.print(F("{\"connected\":"));
+          Serial.print(alive ? F("true") : F("false"));
+          Serial.print(F(",\"temp10\":"));
+          Serial.print(alive ? temp10 : -32768);
+          Serial.print(F(",\"hum10\":"));
+          Serial.print(alive ? hum10 : -1);
+          Serial.print(F(",\"lm\":"));
+          Serial.print((alive && (flags & 0x01)) ? F("true") : F("false"));
+          Serial.print(F(",\"dht\":"));
+          Serial.print((alive && (flags & 0x02)) ? F("true") : F("false"));
+          Serial.print(F(",\"pca\":"));
+          Serial.print((alive && (flags & 0x08)) ? F("true") : F("false"));
+          Serial.println(F("}"));
+        } else {
+          // Reenviar comando directo a Arduino Uno por UART2
+          uartLink.println(cmd);
+          Serial.print(F("FWD UNO: "));
+          Serial.println(cmd);
+        }
+      }
+      usbLen = 0;
+    } else if (usbLen < sizeof(usbLine) - 1) {
+      usbLine[usbLen++] = c;
+    } else {
+      usbLen = 0;
+    }
+  }
+}
+
 void loop() {
   readUART();
+  readUSBSerial();
   server.handleClient();
+
+  if (millis() - lastSerialHeartbeat > 2000) {
+    lastSerialHeartbeat = millis();
+    if (gotFrame && (millis() - lastFrame < 6000)) {
+      Serial.print(F("HEARTBEAT:OK,T="));
+      Serial.print(temp10 / 10.0, 1);
+      Serial.print(F(",H="));
+      Serial.println(hum10 / 10.0, 1);
+    } else {
+      Serial.println(F("HEARTBEAT:ESP32_ALIVE"));
+    }
+  }
 }
 

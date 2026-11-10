@@ -338,23 +338,6 @@ body.speaking .ripple.r2 {
 
 /* Chasis del animatrónico */
 .animatronic-avatar {
-  width: 124px;
-  height: 146px;
-  background: linear-gradient(180deg, #121722 0%, #0c0f16 100%);
-  border-radius: 26px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 16px 36px -12px rgba(0, 0, 0, 0.7),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 12px;
-  position: relative;
-  z-index: 2;
-  flex-shrink: 0;
-}
   width: 136px;
   height: 160px;
   background: linear-gradient(180deg, #121722 0%, #0c0f16 100%);
@@ -367,9 +350,11 @@ body.speaking .ripple.r2 {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  padding: 22px 14px;
+  padding: 20px 14px;
   position: relative;
   z-index: 2;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 /* Ojo animatrónico / sensor óptico */

@@ -291,6 +291,35 @@ void processCommand(char *cmd) {
     ack("PONG");
     return;
   }
+  if (strncmp(cmd, "CMD:", 4) == 0) {
+    char *p = cmd + 4;
+    char *token = strtok(p, ",");
+    while (token != NULL) {
+      char *eq = strchr(token, '=');
+      if (eq != NULL) {
+        *eq = '\0';
+        char *key = token;
+        int val = atoi(eq + 1);
+        if (strcmp(key, "EH") == 0) {
+          int a = constrain(val, 30, 150);
+          pcaSetAngle(0, a);
+          servo0 = a;
+          servoAngles[0] = a;
+        } else if (strcmp(key, "EV") == 0) {
+          int a = constrain(val, 30, 150);
+          pcaSetAngle(1, a);
+          servo1 = a;
+          servoAngles[1] = a;
+        } else if (strcmp(key, "B") == 0 && val == 1) {
+          tone(BUZZER_PIN, 2200, 100);
+        }
+      }
+      token = strtok(NULL, ",");
+    }
+    ack("CMD_OK");
+    sendStatus();
+    return;
+  }
   if (strcmp(cmd, "SCAN") == 0) {
     scanModules();
     pcaOK = pcaStart();

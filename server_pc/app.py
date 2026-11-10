@@ -49,24 +49,73 @@ except ImportError:
         process_agent_actions
     )
 
+try:
+    from serial_bridge import SerialHardwareBridge
+except ImportError:
+    from server_pc.serial_bridge import SerialHardwareBridge
+
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
-# Referencia global al bucle de eventos para callbacks asíncronos desde hilos de visión
+# Referencias globales
 main_loop: Optional[asyncio.AbstractEventLoop] = None
+serial_bridge: Optional[SerialHardwareBridge] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global main_loop
+    global main_loop, serial_bridge
     main_loop = asyncio.get_running_loop()
-    print("[Servidor] Event loop asíncrono capturado para el módulo de visión computacional.")
+    print("[Servidor] Event loop asíncrono capturado.")
+
+    # Callbacks para el puente serie USB (ESP32 / Arduino Uno)
+    def on_serial_telemetry(t: float, h: float):
+        state.temperature = t
+        state.humidity = h
+        if main_loop and main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                broadcast_to_mobile({
+                    "type": "telemetry",
+                    "temperature": state.temperature,
+                    "humidity": state.humidity,
+                    "light_state": state.light_state,
+                }),
+                main_loop
+            )
+
+    def on_serial_status(connected: bool, port: Optional[str]):
+        state.serial_connected = connected
+        state.serial_port_name = port if connected else None
+        state.esp32_connected = connected or bool(state.esp32_socket)
+        if main_loop and main_loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                broadcast_to_mobile({
+                    "type": "esp32_status",
+                    "connected": state.esp32_connected,
+                    "serial_connected": state.serial_connected,
+                    "port": port
+                }),
+                main_loop
+            )
+
+    # Iniciar monitor y pasarela serie en segundo plano
+    serial_bridge = SerialHardwareBridge(
+        baudrate=115200,
+        on_telemetry=on_serial_telemetry,
+        on_status_change=on_serial_status
+    )
+    serial_bridge.start()
+
     yield
+
+    # Liberación ordenada de recursos
+    if serial_bridge:
+        serial_bridge.stop()
     tracker = get_face_tracker()
     if tracker.is_running:
         tracker.stop()
-    print("[Servidor] Cámara y recursos de visión liberados correctamente.")
+    print("[Servidor] Cámara y enlaces serie liberados correctamente.")
 
 app = FastAPI(
     title="animatronico · Servidor Inteligente con Visión Computacional",
@@ -88,7 +137,7 @@ app.add_middleware(
 # ESTADO GLOBAL DEL SISTEMA EN MEMORIA
 # -----------------------------------------------------------------------------
 class SystemState:
-    temperature: float = 23.5  # Lectura LM75A (°C)
+    temperature: float = 23.5  # Lectura LM75A / DHT11 (°C)
     humidity: float = 55.0     # Lectura DHT11 (% RH)
     light_state: int = 0       # 0: Apagada, 1: Encendida (Pin D7)
     mouth_angle: int = 90      # 90° cerrada a 130° abierta
@@ -97,6 +146,8 @@ class SystemState:
     vision_tracking_active: bool = False  # Estado del tracking con cámara
     face_detected: bool = False  # Rostro detectado en el encuadre
     esp32_connected: bool = False
+    serial_connected: bool = False
+    serial_port_name: Optional[str] = None
     mobile_connected: bool = False
     esp32_socket: Optional[WebSocket] = None
     mobile_sockets: List[WebSocket] = []
@@ -139,20 +190,45 @@ last_mobile_servo_broadcast = 0.0
 last_sent_eh = -1
 last_sent_ev = -1
 
+async def send_hardware_command(cmd_text: str) -> bool:
+    """
+    Envía una instrucción de control hacia el hardware físico
+    utilizando WebSocket (si el ESP32 está conectado a la red local) y/o
+    puerto Serie USB (/dev/ttyUSB0 o /dev/ttyACM0).
+    """
+    global serial_bridge
+    sent = False
+    data = cmd_text.strip() + "\n"
+
+    # 1. Enviar por WebSocket si el ESP32 se conectó por Wi-Fi
+    if state.esp32_socket:
+        try:
+            await state.esp32_socket.send_text(data)
+            sent = True
+        except Exception:
+            pass
+
+    # 2. Enviar por puerto Serie USB si está conectado físicamente a la PC
+    if serial_bridge and serial_bridge.is_connected:
+        try:
+            ok = serial_bridge.write_command(data)
+            if ok:
+                sent = True
+        except Exception:
+            pass
+
+    return sent
+
 async def _dispatch_vision_servo(eh: int, ev: int):
     """Reenvía la instrucción de seguimiento calculada por la cámara al ESP32 y a la web de forma optimizada."""
     global last_mobile_servo_broadcast, last_sent_eh, last_sent_ev
 
-    # 1. Enviar al ESP32 sólo si hubo cambio en los ángulos discretos (eliminación de jitter)
-    if state.esp32_socket and (eh != last_sent_eh or ev != last_sent_ev):
+    # 1. Enviar al hardware sólo si hubo cambio en los ángulos discretos (eliminación de jitter)
+    if (state.esp32_socket or (serial_bridge and serial_bridge.is_connected)) and (eh != last_sent_eh or ev != last_sent_ev):
         last_sent_eh = eh
         last_sent_ev = ev
-        # Trama concisa para el mecanismo ε3.2 (Arduino Uno ignora 'M=', enviamos sólo los ejes activos)
         cmd = f"CMD:EH={eh},EV={ev}\n"
-        try:
-            await state.esp32_socket.send_text(cmd)
-        except Exception:
-            pass
+        await send_hardware_command(cmd)
 
     # 2. Rate-limiting hacia el frontend móvil (máximo 10 Hz) para no saturar el canal ni la CPU del móvil
     now = time.time()
@@ -199,12 +275,9 @@ async def apply_hardware_tags(text: str) -> bool:
     if "[BLINK]" in text:
         blink = 1
 
-    if state.esp32_socket and (changed or blink == 1):
+    if changed or blink == 1:
         cmd = f"CMD:EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={blink},L={state.light_state}\n"
-        try:
-            await state.esp32_socket.send_text(cmd)
-        except Exception:
-            pass
+        await send_hardware_command(cmd)
 
     if changed:
         await broadcast_to_mobile({
@@ -268,6 +341,8 @@ async def get_status():
         "face_detected": vision_tracker.face_detected,
         "vision_fps": round(vision_tracker.fps, 1),
         "esp32_connected": state.esp32_connected,
+        "serial_connected": state.serial_connected,
+        "serial_port": state.serial_port_name,
         "mobile_connected": len(state.mobile_sockets) > 0,
         "ollama_ready": ollama_info["ready"],
         "voicebox_ready": vb_ready,
@@ -407,13 +482,10 @@ async def manual_control(req: ControlRequest):
         state.light_state = req.light
 
     cmd = f"CMD:EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={req.blink},L={state.light_state}\n"
-    if state.esp32_socket:
-        try:
-            await state.esp32_socket.send_text(cmd)
-            return {"status": "ok", "sent_cmd": cmd.strip()}
-        except Exception as e:
-            return {"status": "error", "detail": str(e)}
-    return {"status": "buffered", "note": "ESP32 no conectado aún"}
+    sent = await send_hardware_command(cmd)
+    if sent:
+        return {"status": "ok", "sent_cmd": cmd.strip()}
+    return {"status": "buffered", "note": "Hardware no conectado aún"}
 
 # -----------------------------------------------------------------------------
 # RUTAS DE VISIÓN COMPUTACIONAL (CÁMARA LOCAL & SEGUIMIENTO FACIAL)
@@ -435,13 +507,7 @@ async def toggle_vision():
         state.vision_tracking_active = False
         state.eyes_angle = 90
         state.eyes_vertical_angle = 90
-        if state.esp32_socket:
-            try:
-                await state.esp32_socket.send_text(
-                    f"CMD:EH=90,EV=90,B=0,L={state.light_state}\n"
-                )
-            except Exception:
-                pass
+        await send_hardware_command(f"CMD:EH=90,EV=90,B=0,L={state.light_state}\n")
         await broadcast_to_mobile({
             "type": "vision_status",
             "active": False,
@@ -475,13 +541,7 @@ async def stop_vision():
     state.vision_tracking_active = False
     state.eyes_angle = 90
     state.eyes_vertical_angle = 90
-    if state.esp32_socket:
-        try:
-            await state.esp32_socket.send_text(
-                f"CMD:EH=90,EV=90,B=0,L={state.light_state}\n"
-            )
-        except Exception:
-            pass
+    await send_hardware_command(f"CMD:EH=90,EV=90,B=0,L={state.light_state}\n")
     await broadcast_to_mobile({
         "type": "vision_status",
         "active": False,
@@ -674,10 +734,10 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
 
 
     except WebSocketDisconnect:
-        state.esp32_connected = False
         state.esp32_socket = None
-        print("[WS ESP32] ESP32 desconectado.")
-        await broadcast_to_mobile({"type": "esp32_status", "connected": False})
+        state.esp32_connected = state.serial_connected
+        print("[WS ESP32] ESP32 desconectado por WebSocket.")
+        await broadcast_to_mobile({"type": "esp32_status", "connected": state.esp32_connected})
 
 # -----------------------------------------------------------------------------
 # WEBSOCKET 2: COMUNICACIÓN CON EL CELULAR (Móvil)
@@ -729,12 +789,8 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
                 state.eyes_angle = 90
                 state.eyes_vertical_angle = 90
                 state.light_state = 1
-                if state.esp32_socket:
-                    cmd = f"CMD:EH=90,EV=90,B=1,L=1\n"
-                    try:
-                        await state.esp32_socket.send_text(cmd)
-                    except Exception:
-                        pass
+                cmd = f"CMD:EH=90,EV=90,B=1,L=1\n"
+                await send_hardware_command(cmd)
                 await broadcast_to_mobile({
                     "type": "telemetry",
                     "temperature": state.temperature,
@@ -754,12 +810,8 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
                 state.eyes_vertical_angle = max(70, min(110, ev))
                 state.light_state = l
 
-                if state.esp32_socket:
-                    cmd = f"CMD:EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={b},L={state.light_state}\n"
-                    try:
-                        await state.esp32_socket.send_text(cmd)
-                    except Exception:
-                        pass
+                cmd = f"CMD:EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={b},L={state.light_state}\n"
+                await send_hardware_command(cmd)
 
             # Alternar visión artificial desde el cliente WebSocket
             elif event_type == "vision_toggle":
@@ -768,13 +820,7 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
                     state.vision_tracking_active = False
                     state.eyes_angle = 90
                     state.eyes_vertical_angle = 90
-                    if state.esp32_socket:
-                        try:
-                            await state.esp32_socket.send_text(
-                                f"CMD:EH=90,EV=90,B=0,L={state.light_state}\n"
-                            )
-                        except Exception:
-                            pass
+                    await send_hardware_command(f"CMD:EH=90,EV=90,B=0,L={state.light_state}\n")
                 else:
                     started = vision_tracker.start()
                     state.vision_tracking_active = started
