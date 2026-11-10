@@ -1,0 +1,303 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 950" width="1400" height="950" style="background:#0f172a; font-family:system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, sans-serif;">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+    <style>
+      .title { fill:#f8fafc; font-size:24px; font-weight:700; }
+      .subtitle { fill:#94a3b8; font-size:14px; }
+      .chip-header { font-size:15px; font-weight:700; fill:#ffffff; }
+      .chip-sub { font-size:11px; fill:#93c5fd; }
+      .pin-name { font-size:12px; font-weight:600; fill:#e2e8f0; }
+      .pin-desc { font-size:11px; fill:#94a3b8; }
+      .wire { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+      .tag { font-size:11px; font-weight:700; }
+    </style>
+  </defs>
+
+  <!-- ENCABEZADO -->
+  <text x="50" y="45" class="title">DIAGRAMA ELÉCTRICO · ASISTENTE DE ESCRITORIO AUTÓNOMO ("GRAN HERMANO")</text>
+  <text x="50" y="70" class="subtitle">Arduino Uno R3 + ESP32 DevKit V1 + Bus I2C (LM75A / LCD 1602 / PCA9685) + DHT11 + Buzzer KY-006 + Divisor 1k/2k</text>
+
+  <!-- LEYENDA DE COLORES DE CABLES -->
+  <g transform="translate(900, 30)">
+    <rect x="0" y="0" width="450" height="48" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <circle cx="20" cy="24" r="6" fill="#ef4444"/>
+    <text x="32" y="28" fill="#cbd5e1" font-size="11px">5V Lógica</text>
+    <circle cx="105" cy="24" r="6" fill="#64748b"/>
+    <text x="117" y="28" fill="#cbd5e1" font-size="11px">GND Común</text>
+    <circle cx="205" cy="24" r="6" fill="#3b82f6"/>
+    <text x="217" y="28" fill="#cbd5e1" font-size="11px">I2C SDA (A4)</text>
+    <circle cx="310" cy="24" r="6" fill="#10b981"/>
+    <text x="322" y="28" fill="#cbd5e1" font-size="11px">I2C SCL (A5)</text>
+    <circle cx="410" cy="24" r="6" fill="#f59e0b"/>
+    <text x="390" y="42" fill="#cbd5e1" font-size="10px">UART / PWM</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 1. BLOQUE: ARDUINO UNO R3 -->
+  <!-- ========================================================================= -->
+  <g transform="translate(420, 120)" filter="url(#shadow)">
+    <rect x="0" y="0" width="300" height="580" rx="12" fill="#1e293b" stroke="#0284c7" stroke-width="2"/>
+    <rect x="0" y="0" width="300" height="45" rx="12" fill="#0284c7"/>
+    <text x="15" y="28" class="chip-header">ARDUINO UNO R3</text>
+    <text x="15" y="40" class="chip-sub">Controlador Determinista (ATmega328P)</text>
+
+    <!-- Pines lado izquierdo (Poder y Analógicos) -->
+    <g transform="translate(15, 70)">
+      <circle cx="5" cy="10" r="4" fill="#ef4444"/>
+      <text x="20" y="14" class="pin-name">5V</text>
+      <text x="60" y="14" class="pin-desc">Alim. Sensores y Lógica</text>
+
+      <circle cx="5" cy="40" r="4" fill="#64748b"/>
+      <text x="20" y="44" class="pin-name">GND</text>
+      <text x="60" y="44" class="pin-desc">Tierra común de referencia</text>
+
+      <circle cx="5" cy="80" r="4" fill="#3b82f6"/>
+      <text x="20" y="84" class="pin-name">A4 / SDA</text>
+      <text x="90" y="84" class="pin-desc">Bus I2C Datos</text>
+
+      <circle cx="5" cy="110" r="4" fill="#10b981"/>
+      <text x="20" y="114" class="pin-name">A5 / SCL</text>
+      <text x="90" y="114" class="pin-desc">Bus I2C Reloj</text>
+
+      <rect x="0" y="140" width="270" height="1" fill="#334155"/>
+      <text x="0" y="165" fill="#94a3b8" font-size="11px">Alimentación: USB 5V (desde PC/Cargador)</text>
+      <text x="0" y="185" fill="#f59e0b" font-size="11px">Pin AREF: DESCONECTADO (No usar)</text>
+    </g>
+
+    <!-- Pines lado derecho (Digitales) -->
+    <g transform="translate(15, 290)">
+      <rect x="0" y="0" width="270" height="1" fill="#334155"/>
+      <text x="0" y="25" fill="#38bdf8" font-size="12px" font-weight="700">PUERTO DIGITAL Y COMUNICACIÓN</text>
+
+      <circle cx="5" cy="50" r="4" fill="#3b82f6"/>
+      <text x="20" y="54" class="pin-name">Pin D2 (RX)</text>
+      <text x="110" y="54" class="pin-desc">&lt;- Directo desde ESP32 TX2</text>
+
+      <circle cx="5" cy="80" r="4" fill="#f59e0b"/>
+      <text x="20" y="84" class="pin-name">Pin D3 (TX)</text>
+      <text x="110" y="84" class="pin-desc">-&gt; Hacia Divisor 1k/2k</text>
+
+      <circle cx="5" cy="120" r="4" fill="#a855f7"/>
+      <text x="20" y="124" class="pin-name">Pin D4</text>
+      <text x="110" y="124" class="pin-desc">&lt;- DATA Sensor DHT11</text>
+
+      <circle cx="5" cy="160" r="4" fill="#eab308"/>
+      <text x="20" y="164" class="pin-name">Pin D8</text>
+      <text x="110" y="164" class="pin-desc">-&gt; Señal S Buzzer KY-006</text>
+
+      <rect x="0" y="200" width="270" height="60" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="10" y="222" fill="#38bdf8" font-size="11px" font-weight="700">SoftwareSerial @ 9600 bps</text>
+      <text x="10" y="242" fill="#94a3b8" font-size="10px">D2=RX | D3=TX | USB=115200</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 2. BLOQUE: ESP32 DEVKIT V1 -->
+  <!-- ========================================================================= -->
+  <g transform="translate(50, 120)" filter="url(#shadow)">
+    <rect x="0" y="0" width="280" height="420" rx="12" fill="#1e293b" stroke="#10b981" stroke-width="2"/>
+    <rect x="0" y="0" width="280" height="45" rx="12" fill="#10b981"/>
+    <text x="15" y="28" class="chip-header">ESP32 DEVKIT V1</text>
+    <text x="15" y="40" class="chip-sub">Servidor Web y Wi-Fi SoftAP</text>
+
+    <g transform="translate(15, 65)">
+      <circle cx="5" cy="15" r="4" fill="#f59e0b"/>
+      <text x="20" y="19" class="pin-name">GPIO 16 (RX2)</text>
+      <text x="120" y="19" class="pin-desc">&lt;- 3.3V desde divisor</text>
+
+      <circle cx="5" cy="50" r="4" fill="#3b82f6"/>
+      <text x="20" y="54" class="pin-name">GPIO 17 (TX2)</text>
+      <text x="120" y="54" class="pin-desc">-&gt; 3.3V hacia Arduino D2</text>
+
+      <circle cx="5" cy="85" r="4" fill="#64748b"/>
+      <text x="20" y="89" class="pin-name">GND</text>
+      <text x="120" y="89" class="pin-desc">Tierra común</text>
+
+      <rect x="0" y="115" width="250" height="1" fill="#334155"/>
+
+      <rect x="0" y="130" width="250" height="85" rx="6" fill="#0f172a" stroke="#334155"/>
+      <text x="10" y="152" fill="#34d399" font-size="12px" font-weight="700">Punto de Acceso Wi-Fi:</text>
+      <text x="10" y="172" fill="#f8fafc" font-size="11px">SSID: Asistente-ESP32</text>
+      <text x="10" y="190" fill="#f8fafc" font-size="11px">Pass: arquitectura123</text>
+      <text x="10" y="208" fill="#38bdf8" font-size="11px">IP: http://192.168.4.1</text>
+
+      <rect x="0" y="230" width="250" height="100" rx="6" fill="#450a0a" stroke="#ef4444" stroke-width="1"/>
+      <text x="10" y="250" fill="#fca5a5" font-size="11px" font-weight="700">ADVERTENCIA DE ALIMENTACIÓN:</text>
+      <text x="10" y="270" fill="#fecaca" font-size="10px">• Alimentar solo por USB propio.</text>
+      <text x="10" y="290" fill="#fecaca" font-size="10px">• NUNCA meter 3.3V al pin VIN.</text>
+      <text x="10" y="310" fill="#fecaca" font-size="10px">• Pin 3V3 queda libre.</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 3. BLOQUE DIVISOR DE VOLTAJE (1k / 2k) -->
+  <!-- ========================================================================= -->
+  <g transform="translate(100, 580)" filter="url(#shadow)">
+    <rect x="0" y="0" width="250" height="140" rx="10" fill="#1e293b" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="15" y="25" fill="#f59e0b" font-size="13px" font-weight="700">DIVISOR DE VOLTAJE (5V -&gt; 3.3V)</text>
+    <text x="15" y="45" fill="#94a3b8" font-size="11px">Protección de entrada GPIO 16 (RX2)</text>
+
+    <!-- Gráfico divisor -->
+    <path d="M 30,85 L 70,85" stroke="#f59e0b" stroke-width="2"/>
+    <rect x="70" y="75" width="40" height="20" rx="3" fill="#334155" stroke="#f59e0b" stroke-width="1"/>
+    <text x="76" y="89" fill="#ffffff" font-size="10px">1 kΩ</text>
+    <circle cx="130" cy="85" r="4" fill="#38bdf8"/>
+    <path d="M 110,85 L 150,85" stroke="#38bdf8" stroke-width="2"/>
+
+    <path d="M 130,85 L 130,105" stroke="#64748b" stroke-width="2"/>
+    <rect x="120" y="105" width="20" height="25" rx="3" fill="#334155" stroke="#64748b" stroke-width="1"/>
+    <text x="122" y="122" fill="#ffffff" font-size="9px">2k</text>
+    <path d="M 130,130 L 130,135" stroke="#64748b" stroke-width="2"/>
+    <line x1="120" y1="135" x2="140" y2="135" stroke="#64748b" stroke-width="2"/>
+
+    <text x="155" y="88" fill="#38bdf8" font-size="11px" font-weight="700">3.33V (Hacia RX2)</text>
+    <text x="15" y="115" fill="#cbd5e1" font-size="10px">Entrada D3 (5V)</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 4. BLOQUE: MÓDULOS DEL BUS I2C (DERECHA SUPERIOR) -->
+  <!-- ========================================================================= -->
+  <!-- LM75A -->
+  <g transform="translate(800, 120)" filter="url(#shadow)">
+    <rect x="0" y="0" width="240" height="130" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+    <rect x="0" y="0" width="240" height="32" rx="10" fill="#0369a1"/>
+    <text x="12" y="21" class="chip-header">LM75A (TEMPERATURA)</text>
+    <text x="160" y="21" fill="#93c5fd" font-size="11px">I2C: 0x48</text>
+
+    <g transform="translate(15, 45)">
+      <circle cx="5" cy="15" r="4" fill="#ef4444"/><text x="18" y="19" class="pin-name">VCC (5V Arduino)</text>
+      <circle cx="5" cy="38" r="4" fill="#64748b"/><text x="18" y="42" class="pin-name">GND</text>
+      <circle cx="5" cy="61" r="4" fill="#3b82f6"/><text x="18" y="65" class="pin-name">SDA (A4)</text>
+      <circle cx="120" cy="61" r="4" fill="#10b981"/><text x="133" y="65" class="pin-name">SCL (A5)</text>
+    </g>
+  </g>
+
+  <!-- LCD 1602 I2C -->
+  <g transform="translate(800, 280)" filter="url(#shadow)">
+    <rect x="0" y="0" width="240" height="135" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
+    <rect x="0" y="0" width="240" height="32" rx="10" fill="#0369a1"/>
+    <text x="12" y="21" class="chip-header">PANTALLA LCD 1602 I2C</text>
+    <text x="160" y="21" fill="#93c5fd" font-size="11px">0x27 / 0x3F</text>
+
+    <g transform="translate(15, 45)">
+      <circle cx="5" cy="15" r="4" fill="#64748b"/><text x="18" y="19" class="pin-name">GND</text>
+      <circle cx="120" cy="15" r="4" fill="#ef4444"/><text x="133" y="19" class="pin-name">VCC (5V)</text>
+      <circle cx="5" cy="40" r="4" fill="#3b82f6"/><text x="18" y="44" class="pin-name">SDA (A4)</text>
+      <circle cx="120" cy="40" r="4" fill="#10b981"/><text x="133" y="44" class="pin-name">SCL (A5)</text>
+      <text x="0" y="75" fill="#f59e0b" font-size="10px">* Ajustar potenciómetro de contraste</text>
+    </g>
+  </g>
+
+  <!-- PCA9685 CONTROLADOR SERVOS -->
+  <g transform="translate(800, 445)" filter="url(#shadow)">
+    <rect x="0" y="0" width="280" height="230" rx="10" fill="#1e293b" stroke="#8b5cf6" stroke-width="2"/>
+    <rect x="0" y="0" width="280" height="35" rx="10" fill="#6d28d9"/>
+    <text x="12" y="23" class="chip-header">PCA9685 (16 CANALES PWM)</text>
+    <text x="210" y="23" fill="#ddd6fe" font-size="11px">I2C: 0x40</text>
+
+    <g transform="translate(15, 48)">
+      <circle cx="5" cy="12" r="4" fill="#ef4444"/><text x="18" y="16" class="pin-name">VCC (Lógica 5V Arduino)</text>
+      <circle cx="5" cy="35" r="4" fill="#64748b"/><text x="18" y="39" class="pin-name">GND (Tierra común)</text>
+      <circle cx="5" cy="58" r="4" fill="#3b82f6"/><text x="18" y="62" class="pin-name">SDA (A4)</text>
+      <circle cx="120" cy="58" r="4" fill="#10b981"/><text x="133" y="62" class="pin-name">SCL (A5)</text>
+
+      <rect x="0" y="80" width="250" height="55" rx="6" fill="#14532d" stroke="#22c55e" stroke-width="1.5"/>
+      <text x="10" y="100" fill="#86efac" font-size="11px" font-weight="700">BORNE VERDE DE FUERZA (V+ / GND)</text>
+      <text x="10" y="118" fill="#ffffff" font-size="10px">V+ &lt;- 5.0V desde LM2596 (Salida regulada)</text>
+      <text x="10" y="130" fill="#ffffff" font-size="10px">GND &lt;- Tierra de fuente externa</text>
+
+      <text x="0" y="155" fill="#f59e0b" font-size="11px" font-weight="700">SALIDAS DE SERVOS:</text>
+      <text x="10" y="172" fill="#e2e8f0" font-size="10px">• Canal 0: Servo 1 (Brazo / Pan)</text>
+      <text x="10" y="186" fill="#e2e8f0" font-size="10px">• Canal 1: Servo 2 (Cabeza / Tilt)</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 5. BLOQUE DE POTENCIA: FUENTE 12V + LM2596 -->
+  <!-- ========================================================================= -->
+  <g transform="translate(1110, 445)" filter="url(#shadow)">
+    <rect x="0" y="0" width="240" height="230" rx="10" fill="#1e293b" stroke="#eab308" stroke-width="1.5"/>
+    <rect x="0" y="0" width="240" height="35" rx="10" fill="#ca8a04"/>
+    <text x="12" y="23" class="chip-header">LM2596 STEP-DOWN</text>
+
+    <g transform="translate(15, 50)">
+      <text x="0" y="15" fill="#fef08a" font-size="12px" font-weight="700">ENTRADA (IN+ / IN-):</text>
+      <text x="10" y="35" fill="#ffffff" font-size="11px">• Fuente externa 12V 1A DC</text>
+
+      <text x="0" y="70" fill="#4ade80" font-size="12px" font-weight="700">SALIDA (OUT+ / OUT-):</text>
+      <text x="10" y="90" fill="#86efac" font-size="11px" font-weight="700">• REGULADO A EXACTAMENTE 5.0V</text>
+      <text x="10" y="108" fill="#94a3b8" font-size="10px">(Midiendo con multímetro antes de conectar)</text>
+
+      <rect x="0" y="125" width="210" height="48" rx="6" fill="#0f172a" stroke="#ca8a04"/>
+      <text x="10" y="145" fill="#facc15" font-size="10px" font-weight="700">Conexión directa:</text>
+      <text x="10" y="160" fill="#ffffff" font-size="10px">OUT+ -&gt; Borne V+ del PCA9685</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 6. SENSORES DIGITALES (ABAJO): DHT11 & BUZZER -->
+  <!-- ========================================================================= -->
+  <!-- DHT11 -->
+  <g transform="translate(420, 740)" filter="url(#shadow)">
+    <rect x="0" y="0" width="210" height="140" rx="10" fill="#1e293b" stroke="#a855f7" stroke-width="1.5"/>
+    <rect x="0" y="0" width="210" height="30" rx="10" fill="#7e22ce"/>
+    <text x="12" y="20" class="chip-header">DHT11 (HUMEDAD)</text>
+
+    <g transform="translate(15, 45)">
+      <circle cx="5" cy="15" r="4" fill="#ef4444"/><text x="18" y="19" class="pin-name">VCC (5V)</text>
+      <circle cx="5" cy="40" r="4" fill="#a855f7"/><text x="18" y="44" class="pin-name">DATA -&gt; Arduino D4</text>
+      <circle cx="5" cy="65" r="4" fill="#64748b"/><text x="18" y="69" class="pin-name">GND</text>
+      <text x="0" y="85" fill="#94a3b8" font-size="10px">Driver ciclo-a-ciclo sin bloqueos</text>
+    </g>
+  </g>
+
+  <!-- BUZZER KY-006 -->
+  <g transform="translate(660, 740)" filter="url(#shadow)">
+    <rect x="0" y="0" width="200" height="140" rx="10" fill="#1e293b" stroke="#eab308" stroke-width="1.5"/>
+    <rect x="0" y="0" width="200" height="30" rx="10" fill="#a16207"/>
+    <text x="12" y="20" class="chip-header">BUZZER KY-006</text>
+
+    <g transform="translate(15, 45)">
+      <circle cx="5" cy="15" r="4" fill="#eab308"/><text x="18" y="19" class="pin-name">Señal S -&gt; Arduino D8</text>
+      <circle cx="5" cy="40" r="4" fill="#64748b"/><text x="18" y="44" class="pin-name">GND / -</text>
+      <text x="0" y="70" fill="#94a3b8" font-size="10px">Pata central: SIN CONECTAR</text>
+      <text x="0" y="85" fill="#fef08a" font-size="10px">Alarma T&gt;=30°C o H&gt;=75%</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 7. CONEXIONES Y CABLEADO (LINEAS ORTOGONALES) -->
+  <!-- ========================================================================= -->
+  <!-- Cable UART TX2 ESP32 (GPIO 17) -> Arduino D2 (Azul) -->
+  <path d="M 195,174 L 380,174 L 380,340 L 435,340" class="wire" stroke="#3b82f6" stroke-width="2.5"/>
+  <text x="240" y="166" fill="#3b82f6" font-size="10px" font-weight="700">UART: ESP32 TX2 -&gt; Arduino D2 (RX)</text>
+
+  <!-- Cable UART Arduino D3 -> Divisor 1k/2k (Naranja) -->
+  <path d="M 435,374 L 360,374 L 360,665 L 170,665" class="wire" stroke="#f59e0b" stroke-width="2.5"/>
+  <text x="280" y="366" fill="#f59e0b" font-size="10px" font-weight="700">UART 5V (D3 TX)</text>
+
+  <!-- Cable Divisor -> ESP32 RX2 (GPIO 16) (Cian) -->
+  <path d="M 230,665 L 290,665 L 290,139 L 205,139" class="wire" stroke="#38bdf8" stroke-width="2.5"/>
+  <text x="235" y="655" fill="#38bdf8" font-size="10px" font-weight="700">3.33V Protegido</text>
+
+  <!-- Bus I2C Compartido (SDA Azul / SCL Verde) -->
+  <path d="M 440,204 L 760,204 L 760,181 L 815,181" class="wire" stroke="#3b82f6" stroke-width="2"/>
+  <path d="M 760,204 L 760,320 L 815,320" class="wire" stroke="#3b82f6" stroke-width="2"/>
+  <path d="M 760,320 L 760,503 L 815,503" class="wire" stroke="#3b82f6" stroke-width="2"/>
+  <circle cx="760" cy="204" r="4" fill="#3b82f6"/>
+  <circle cx="760" cy="320" r="4" fill="#3b82f6"/>
+
+  <path d="M 440,234 L 780,234 L 780,181 L 935,181" class="wire" stroke="#10b981" stroke-width="2"/>
+  <path d="M 780,234 L 780,320 L 935,320" class="wire" stroke="#10b981" stroke-width="2"/>
+  <path d="M 780,320 L 780,503 L 935,503" class="wire" stroke="#10b981" stroke-width="2"/>
+  <circle cx="780" cy="234" r="4" fill="#10b981"/>
+  <circle cx="780" cy="320" r="4" fill="#10b981"/>
+
+  <!-- Cable Potencia LM2596 -> PCA9685 Borne V+ -->
+  <path d="M 1110,570 L 1050,570" class="wire" stroke="#22c55e" stroke-width="3"/>
+  <text x="1055" y="562" fill="#22c55e" font-size="10px" font-weight="700">5.00V Servos</text>
+
+</svg>
+

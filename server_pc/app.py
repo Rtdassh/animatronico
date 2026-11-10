@@ -630,7 +630,7 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             data = data.strip()
 
-            # Parsear trama de telemetría de sensores: SENS:T=23.5,H=58.2
+            # Parsear trama de telemetría de sensores: SENS:T=23.5,H=58.2 o S,235,582,15,...
             if data.startswith("SENS:"):
                 raw = data[5:]
                 pairs = raw.split(",")
@@ -652,6 +652,26 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
                     "humidity": state.humidity,
                     "light_state": state.light_state,
                 })
+
+            elif data.startswith("S,"):
+                parts = data.split(",")
+                if len(parts) >= 3:
+                    try:
+                        t10 = int(parts[1])
+                        h10 = int(parts[2])
+                        if t10 > -3000:
+                            state.temperature = round(t10 / 10.0, 1)
+                        if h10 >= 0:
+                            state.humidity = round(h10 / 10.0, 1)
+                    except ValueError:
+                        pass
+                await broadcast_to_mobile({
+                    "type": "telemetry",
+                    "temperature": state.temperature,
+                    "humidity": state.humidity,
+                    "light_state": state.light_state,
+                })
+
 
     except WebSocketDisconnect:
         state.esp32_connected = False

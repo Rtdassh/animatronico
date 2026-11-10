@@ -20,8 +20,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 FIRMWARE_DIR = BASE_DIR / "firmware"
 BIN_DIR = FIRMWARE_DIR / "binarios"
 
-ARDUINO_SKETCH_DIR = FIRMWARE_DIR / "arduino_uno_animatronico"
-ESP32_SKETCH_DIR = FIRMWARE_DIR / "esp32_puente_websocket"
+ARDUINO_SKETCH_DIR = FIRMWARE_DIR / "asistente_arduino"
+ESP32_SKETCH_DIR = FIRMWARE_DIR / "asistente_esp32"
+ARDUINO_ANIMATRONICO_DIR = FIRMWARE_DIR / "arduino_uno_animatronico"
+ESP32_ANIMATRONICO_DIR = FIRMWARE_DIR / "esp32_puente_websocket"
 
 ARDUINO_BIN_DIR = BIN_DIR / "arduino_uno"
 ESP32_BIN_DIR = BIN_DIR / "esp32"
@@ -258,12 +260,18 @@ def menu_interactivo():
         print("Opción no reconocida.")
 
 def main():
-    parser = argparse.ArgumentParser(description="Grabador oficial de firmware para Cabeza Animatrónica.")
+    global ARDUINO_SKETCH_DIR, ESP32_SKETCH_DIR
+    parser = argparse.ArgumentParser(description="Grabador oficial de firmware para Asistente de Escritorio y Animatrónico.")
     parser.add_argument("--arduino", "-a", metavar="PORT", help="Grabar Arduino Uno en el puerto indicado (ej. /dev/ttyACM0 o COM3)")
     parser.add_argument("--esp32", "-e", metavar="PORT", help="Grabar ESP32 en el puerto indicado (ej. /dev/ttyUSB0 o COM4)")
+    parser.add_argument("--animatronico", action="store_true", help="Usar firmware original de la cabeza animatrónica en lugar del asistente")
     parser.add_argument("--compile-only", "-c", choices=["arduino", "esp32", "all"], help="Compilar binarios sin grabar")
     parser.add_argument("--list", "-l", action="store_true", help="Listar puertos serie detectados")
     args = parser.parse_args()
+
+    if args.animatronico:
+        ARDUINO_SKETCH_DIR = ARDUINO_ANIMATRONICO_DIR
+        ESP32_SKETCH_DIR = ESP32_ANIMATRONICO_DIR
 
     if args.list:
         ports = get_connected_ports()
