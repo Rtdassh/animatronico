@@ -1128,6 +1128,10 @@ btnCloseManual.addEventListener('click', () => {
 sliderMouth.addEventListener('input', (e) => {
   const val = parseInt(e.target.value);
   valMouth.textContent = `${val}°`;
+  if (jawLower) {
+    const px = Math.max(0, Math.round(((val - 90) / 60) * 14));
+    jawLower.style.transform = `translateY(${px}px)`;
+  }
   sendManualMove(val, parseInt(sliderEyes.value), parseInt(sliderEyesV ? sliderEyesV.value : 90), 0);
 });
 
@@ -1164,21 +1168,31 @@ btnCenterAll.addEventListener('click', () => {
   valMouth.textContent = '90°';
   valEyes.textContent = '90°';
   if (valEyesV) valEyesV.textContent = '90°';
+  if (jawLower) jawLower.style.transform = 'translateY(0px)';
   sendManualMove(90, 90, 90, 0);
   updateAvatarEyePosition(90, 90);
 });
 
 function sendManualMove(m, e, ev, b) {
+  const payload = {
+    event: 'manual_move',
+    mouth: m,
+    eyes: e,
+    eyes_v: ev || 90,
+    blink: b,
+    light: lightState,
+    channel: 0,
+    angle: m
+  };
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      event: 'manual_move',
-      mouth: m,
-      eyes: e,
-      eyes_v: ev || 90,
-      blink: b,
-      light: lightState
-    }));
+    ws.send(JSON.stringify(payload));
   }
+  // Enviar también por HTTP para garantizar despacho instantáneo al servo PCA9685
+  fetch('/api/control', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {});
 }
 
 // Controles del Módulo de Visión Artificial

@@ -168,6 +168,8 @@ class ControlRequest(BaseModel):
     eyes_v: int = 90
     blink: int = 0
     light: int = -1
+    channel: Optional[int] = None
+    angle: Optional[int] = None
 
 class VisionConfigRequest(BaseModel):
     invert_x: Optional[bool] = None
@@ -475,16 +477,28 @@ async def chat_text(req: ChatRequest):
 @app.post("/api/control")
 async def manual_control(req: ControlRequest):
     """Control manual directo de servomotores y luz desde los deslizadores móviles."""
-    state.mouth_angle = max(90, min(130, req.mouth))
-    state.eyes_angle = max(60, min(120, req.eyes))
-    state.eyes_vertical_angle = max(70, min(110, req.eyes_v))
+    # Control directo por canal en PCA9685
+    if req.channel is not None and req.angle is not None:
+        ch = max(0, min(15, req.channel))
+        ang = max(30, min(150, req.angle))
+        cmd_ch = f"S{ch}:{ang}\n"
+        sent_ch = await send_hardware_command(cmd_ch)
+        if ch == 0:
+            state.mouth_angle = ang
+        return {"status": "ok" if sent_ch else "error", "sent_cmd": cmd_ch.strip(), "channel": ch, "angle": ang}
+
+    state.mouth_angle = max(30, min(150, req.mouth))
+    state.eyes_angle = max(30, min(150, req.eyes))
+    state.eyes_vertical_angle = max(30, min(150, req.eyes_v))
     if req.light in (0, 1):
         state.light_state = req.light
 
-    cmd = f"CMD:EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={req.blink},L={state.light_state}\n"
+    # Enviar comando de Canal 0 en PCA9685 (la primera opción de la interfaz)
+    await send_hardware_command(f"S0:{state.mouth_angle}\n")
+    cmd = f"CMD:M={state.mouth_angle},EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={req.blink},L={state.light_state}\n"
     sent = await send_hardware_command(cmd)
     if sent:
-        return {"status": "ok", "sent_cmd": cmd.strip()}
+        return {"status": "ok", "sent_cmd": f"S0:{state.mouth_angle}"}
     return {"status": "buffered", "note": "Hardware no conectado aún"}
 
 # -----------------------------------------------------------------------------
@@ -779,10 +793,8 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
             # El celular reproduce audio y calcula el ángulo de mandíbula en vivo para el avatar web
             if event_type == "lipsync_frame":
                 mouth_angle = int(msg.get("mouth", 90))
-                state.mouth_angle = max(90, min(130, mouth_angle))
-                # NOTA: En la arquitectura física ε3.2 con PCA9685, el audio se reproduce exclusivamente
-                # en el smartphone (asistente manos libres). No existe servo de boca en el Arduino.
-                # Desacoplado: NO se satura el ESP32 ni el puerto serial a 22 Hz con tramas de boca.
+                state.mouth_angle = max(30, min(150, mouth_angle))
+                await send_hardware_command(f"S0:{state.mouth_angle}\n")
 
             # Notificación de palabra clave Wake-Word ("Oye Robot", "Alexa")
             elif event_type == "wake_alert":
@@ -805,12 +817,22 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
                 ev = msg.get("eyes_v", state.eyes_vertical_angle)
                 b = msg.get("blink", 0)
                 l = msg.get("light", state.light_state)
-                state.mouth_angle = max(90, min(130, m))
-                state.eyes_angle = max(60, min(120, e))
-                state.eyes_vertical_angle = max(70, min(110, ev))
+                ch = msg.get("channel")
+                ang = msg.get("angle")
+
+                if ch is not None and ang is not None:
+                    ch_num = max(0, min(15, int(ch)))
+                    ang_num = max(30, min(150, int(ang)))
+                    await send_hardware_command(f"S{ch_num}:{ang_num}\n")
+
+                state.mouth_angle = max(30, min(150, m))
+                state.eyes_angle = max(30, min(150, e))
+                state.eyes_vertical_angle = max(30, min(150, ev))
                 state.light_state = l
 
-                cmd = f"CMD:EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={b},L={state.light_state}\n"
+                # Enviar S0: directo para el servo en el Canal 0 del PCA9685
+                await send_hardware_command(f"S0:{state.mouth_angle}\n")
+                cmd = f"CMD:M={state.mouth_angle},EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={b},L={state.light_state}\n"
                 await send_hardware_command(cmd)
 
             # Alternar visión artificial desde el cliente WebSocket
