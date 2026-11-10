@@ -5,6 +5,6 @@ REM ============================================================================
 chcp 65001 >nul
 title Grabador Firmware - Cabeza Animatronica
 
-python tools\grabar_firmware.py %*
+python tools\grabar_firmware.py --asistente %*
 pause
 

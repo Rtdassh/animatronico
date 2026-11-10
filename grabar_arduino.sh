@@ -29,5 +29,5 @@ if [ -z "$PORT" ]; then
     exit 1
 fi
 
-python3 "$SCRIPT_DIR/tools/grabar_firmware.py" --arduino "$PORT"
+python3 "$SCRIPT_DIR/tools/grabar_firmware.py" --asistente --arduino "$PORT"
 

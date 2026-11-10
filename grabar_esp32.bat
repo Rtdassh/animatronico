@@ -21,7 +21,7 @@ if "%PORT%"=="" (
     exit /b 1
 )
 
-python tools\grabar_firmware.py --esp32 %PORT%
+python tools\grabar_firmware.py --asistente --esp32 %PORT%
 if errorlevel 1 (
     echo [ERROR] Hubo un problema al grabar.
 ) else (
