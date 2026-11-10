@@ -28,6 +28,7 @@ voicebox_profile/
 
 # Binarios pesados
 server_pc/bin/*.exe
+server_pc/bin/cloudflared
 
 # Archivos temporales de sistema operativo y editores
 .DS_Store

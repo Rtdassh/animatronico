@@ -20,10 +20,14 @@ import sys
 import os
 import re
 import atexit
+import shutil
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-CLOUDFLARED_BIN = BASE_DIR / "bin" / "cloudflared.exe"
+CLOUDFLARED_BIN = BASE_DIR / "bin" / ("cloudflared.exe" if sys.platform.startswith("win") else "cloudflared")
+if not CLOUDFLARED_BIN.exists() and shutil.which("cloudflared"):
+    CLOUDFLARED_BIN = Path(shutil.which("cloudflared"))
+
 
 global_tunnel_proc = None
 
