@@ -708,10 +708,17 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            data = await websocket.receive_text()
+            msg = await websocket.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            raw_text = msg.get("text")
+            if raw_text is None and "bytes" in msg:
+                raw_text = msg["bytes"].decode("utf-8", errors="ignore")
+            if not raw_text:
+                continue
             if state.esp32_socket is not websocket:
                 break
-            data = data.strip()
+            data = raw_text.strip()
 
             # Parsear trama de telemetría de sensores: SENS:T=23.5,H=58.2 o S,235,582,15,...
             if data.startswith("SENS:"):

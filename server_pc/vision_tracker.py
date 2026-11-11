@@ -279,7 +279,7 @@ class FaceTracker:
                 "smooth_factor": self.smooth_factor,
                 "deadband": self.deadband,
                 "return_to_center_delay": self.return_to_center_delay,
-                "face_box": self.face_box,
+                "face_box": [int(x) for x in self.face_box] if self.face_box else None,
             }
 
     def get_latest_jpeg(self) -> Optional[bytes]:
