@@ -973,7 +973,7 @@ function updateVisionUI(active, faceDetected, pan, tilt, fps) {
   }
 
   if (visionBtnLabel) {
-    visionBtnLabel.textContent = isVisionActive ? 'Detener Visión' : 'Iniciar Visión';
+    visionBtnLabel.textContent = isVisionActive ? '⏹ Detener Visión' : '📷 Iniciar Visión';
     if (btnToggleVision) btnToggleVision.classList.toggle('running', isVisionActive);
   }
 
@@ -1009,11 +1009,15 @@ async function toggleVisionTracking() {
     const resp = await fetch('/api/vision/toggle', { method: 'POST' });
     const data = await resp.json();
     updateVisionUI(data.active, false, 90, 90);
-    if (data.active && isPreviewOpen) {
+    if (data.active) {
+      isPreviewOpen = true;
+      if (visionPreviewCard) visionPreviewCard.style.display = 'flex';
       startVisionStream();
-    } else if (!data.active) {
+    } else {
+      isPreviewOpen = false;
+      if (visionPreviewCard) visionPreviewCard.style.display = 'none';
+      stopVisionStream();
       updateAvatarEyePosition(90, 90);
-      if (visionFeedImg) visionFeedImg.src = '';
     }
   } catch (err) {
     console.error('[Vision Toggle Error]', err);

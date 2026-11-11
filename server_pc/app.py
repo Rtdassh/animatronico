@@ -502,7 +502,7 @@ async def manual_control(req: ControlRequest):
     cmd = f"CMD:M={state.mouth_angle},EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={req.blink},L={state.light_state}\n"
     sent = await send_hardware_command(cmd)
     if sent:
-        return {"status": "ok", "sent_cmd": f"S6:{state.mouth_angle}"}
+        return {"status": "ok", "sent_cmd": cmd.strip()}
     return {"status": "buffered", "note": "Hardware no conectado aún"}
 
 # -----------------------------------------------------------------------------

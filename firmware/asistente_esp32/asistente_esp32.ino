@@ -244,8 +244,8 @@ void setup() {
   internetSsid = settings.getString("wifiSsid", "");
   internetPassword = settings.getString("wifiPass", "");
 
-  // Inicializar UART2 en GPIO 16 (RX) y GPIO 17 (TX) a 9600 baudios
-  uartLink.begin(9600, SERIAL_8N1, 16, 17);
+  // Inicializar UART2 en GPIO 16 (RX) y GPIO 17 (TX) a 38400 baudios
+  uartLink.begin(38400, SERIAL_8N1, 16, 17);
 
   // Iniciar Punto de Acceso Wi-Fi
   WiFi.mode(WIFI_AP_STA);

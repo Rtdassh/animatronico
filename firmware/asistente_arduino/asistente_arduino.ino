@@ -13,7 +13,7 @@
     - Comunicación Serie con ESP32 (SoftwareSerial):
         * Pin D2 (RX) <- Directo desde ESP32 TX2 / GPIO17 (3.3V)
         * Pin D3 (TX) -> Divisor Resistivo (1kΩ serie + 2kΩ a GND) -> ESP32 RX2 / GPIO16
-        * Tasa: 9600 baudios
+        * Tasa: 38400 baudios (4x ancho de banda, baja latencia para servos)
     - Monitor Serie USB: 115200 baudios para diagnóstico y comandos manuales
   =============================================================================
 */
@@ -470,7 +470,7 @@ void setup() {
   pinMode(LIGHT_PIN, OUTPUT);
   pinMode(DHT_PIN, INPUT_PULLUP);
   Serial.begin(115200);
-  link.begin(9600);
+  link.begin(38400);
   Wire.begin();
   Wire.setClock(100000);
   Wire.setWireTimeout(25000, true);
