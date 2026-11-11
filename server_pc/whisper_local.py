@@ -33,6 +33,7 @@ def _register_cuda_dlls():
 
 
 def _pick_device():
+    _register_cuda_dlls()
     wanted = os.getenv("WHISPER_DEVICE", "auto").lower()
     if wanted in ("cuda", "cpu"):
         return wanted
@@ -98,6 +99,6 @@ def transcribe(pcm: bytes, rate: int, language: str = "es") -> str:
         beam_size=5 if _device == "cuda" else 1,
         vad_filter=True,  # Ignora silencios: evita "alucinaciones" de Whisper.
         condition_on_previous_text=False,
-        initial_prompt=os.getenv("STT_PROMPT") or None,
+        initial_prompt=os.getenv("STT_PROMPT") or "Dom dom, oye Libni, oye V, robot, despierta, asistente, vendetta.",
     )
     return " ".join(segment.text.strip() for segment in segments).strip()

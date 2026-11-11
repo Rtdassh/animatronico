@@ -50,6 +50,7 @@ def create_router(bridge_getter):
         content = await audio.read(2_000_001)
         try:
             text, engine = await asyncio.to_thread(transcribe, content)
+            print(f'[STT] {engine}: {text!r}', flush=True)
             return {'text': text, 'engine': engine, 'local': engine == 'vosk'}
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc

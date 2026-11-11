@@ -246,12 +246,12 @@ void lcdLine(uint8_t line, const char *text) {
 void updateLCD() {
   if (!lcdAddr) return;
   char l1[17], l2[17];
-  if (lmOK && temp10 > -3000) {
+  if (temp10 > -3000) {
     int whole = temp10 / 10;
     int dec = abs(temp10 % 10);
-    snprintf(l1, sizeof(l1), "LM75 %d.%d C", whole, dec);
+    snprintf(l1, sizeof(l1), "%s %d.%d C", lmOK ? "LM75" : "DHT11", whole, dec);
   } else {
-    strncpy(l1, "LM75 SIN DATOS", sizeof(l1));
+    strncpy(l1, "TEMP SIN DATOS", sizeof(l1));
   }
 
   if (dhtOK && hum10 >= 0) {
@@ -512,7 +512,11 @@ void loop() {
     dhtOK = readDHT11(t, h);
     if (dhtOK) {
       hum10 = h;
+      if (!lmOK) {
+        temp10 = t;
+      }
       Serial.print(F("DHT11 humedad x10: ")); Serial.println(hum10);
+      Serial.print(F("DHT11 temp x10: ")); Serial.println(temp10);
     } else {
       hum10 = -1;
       ++dhtErrors;

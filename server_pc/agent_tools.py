@@ -34,6 +34,85 @@ MESES = [
 ]
 
 
+def _sin_tildes(text: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
+
+
+def normalize_date(value: Optional[str], today: Optional[datetime.date] = None) -> str:
+    """Convierte 'hoy', 'mañana', 'viernes', '12 de noviembre', '12/11', ISO... a AAAA-MM-DD."""
+    import re
+    today = today or datetime.date.today()
+    if not value or not value.strip():
+        return today.isoformat()
+    v = _sin_tildes(value.strip().lower())
+    try:
+        return datetime.date.fromisoformat(v[:10]).isoformat()
+    except ValueError:
+        pass
+    if "pasado manana" in v:
+        return (today + datetime.timedelta(days=2)).isoformat()
+    if "manana" in v and not re.search(r"\d+\s*(?:de la|en la)?\s*manana", v):
+        return (today + datetime.timedelta(days=1)).isoformat()
+    if "hoy" in v:
+        return today.isoformat()
+    m = re.search(r"en (\d+) dias?", v)
+    if m:
+        return (today + datetime.timedelta(days=int(m.group(1)))).isoformat()
+    meses = [_sin_tildes(x) for x in MESES]
+    m = re.search(r"(\d{1,2})\s*de\s*([a-z]+)(?:\s*(?:de|del)?\s*(\d{4}))?", v)
+    if m and m.group(2) in meses:
+        return _future_date(today, int(m.group(1)), meses.index(m.group(2)) + 1, m.group(3))
+    m = re.search(r"(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?", v)
+    if m:
+        year = m.group(3)
+        if year and len(year) == 2:
+            year = "20" + year
+        return _future_date(today, int(m.group(1)), int(m.group(2)), year)
+    for i, dia in enumerate(DIAS_SEMANA):
+        if _sin_tildes(dia) in v:
+            delta = (i - today.weekday()) % 7 or 7  # el próximo día con ese nombre
+            return (today + datetime.timedelta(days=delta)).isoformat()
+    return today.isoformat()
+
+
+def _future_date(today, day, month, year=None) -> str:
+    try:
+        date = datetime.date(int(year) if year else today.year, month, day)
+        if not year and date < today:
+            date = date.replace(year=today.year + 1)
+        return date.isoformat()
+    except ValueError:
+        return today.isoformat()
+
+
+def normalize_time(value: Optional[str]) -> str:
+    """Convierte '16:00', '4 pm', '4 de la tarde', '9:30 de la mañana', 'mediodía' a HH:MM ('' si no hay hora)."""
+    import re
+    if not value or not value.strip():
+        return ""
+    v = _sin_tildes(value.strip().lower())
+    if "mediodia" in v:
+        return "12:00"
+    if "medianoche" in v:
+        return "00:00"
+    m = re.search(r"(\d{1,2})(?:[:.h](\d{2}))?", v)
+    if not m:
+        return ""
+    hour, minute = int(m.group(1)), int(m.group(2) or 0)
+    if any(w in v for w in ("pm", "p.m", "tarde", "noche")) and hour < 12:
+        hour += 12
+    if any(w in v for w in ("am", "a.m", "madrugada", "manana")) and hour == 12:
+        hour = 0
+    if "y media" in v:
+        minute = 30
+    elif "y cuarto" in v:
+        minute = 15
+    if hour > 23 or minute > 59:
+        return ""
+    return f"{hour:02d}:{minute:02d}"
+
+
 def _init_default_agenda():
     """Inicializa la agenda con entradas temáticas por defecto si no existe."""
     today = datetime.date.today().isoformat()
@@ -97,8 +176,8 @@ def add_agenda_item(title: str, date_str: Optional[str] = None, time_str: Option
     new_item = {
         "id": f"item_{uuid.uuid4().hex[:6]}",
         "title": title.strip(),
-        "date": date_str.strip() if date_str else today_iso,
-        "time": time_str.strip() if time_str else now_time,
+        "date": normalize_date(date_str),
+        "time": normalize_time(time_str),
         "category": category
     }
     items.append(new_item)
@@ -168,6 +247,28 @@ def get_agenda_summary_for_today() -> str:
     return "Tus compromisos para el día de hoy son: " + "; ".join(desc) + "."
 
 
+def get_upcoming_agenda_text(days: int = 7) -> str:
+    """Compromisos desde hoy hasta dentro de `days` días, ordenados (para el prompt del modelo)."""
+    today = datetime.date.today()
+    limit = (today + datetime.timedelta(days=days)).isoformat()
+    items = sorted((it for it in load_agenda() if today.isoformat() <= str(it.get("date", "")) <= limit),
+                   key=lambda it: (it.get("date", ""), it.get("time", "")))
+    if not items:
+        return "No hay compromisos agendados para los próximos días."
+    lines = []
+    for it in items:
+        d = datetime.date.fromisoformat(it["date"])
+        if d == today:
+            cuando = "hoy"
+        elif d == today + datetime.timedelta(days=1):
+            cuando = "mañana"
+        else:
+            cuando = f"el {DIAS_SEMANA[d.weekday()]} {d.day} de {MESES[d.month - 1]}"
+        hora = f" a las {it['time']}" if it.get("time") else ""
+        lines.append(f"{cuando}{hora}: {it.get('title')}")
+    return "; ".join(lines) + "."
+
+
 def get_all_agenda_text() -> str:
     """Genera una lista textual de todos los compromisos agendados."""
     items = load_agenda()
@@ -188,15 +289,19 @@ def process_agent_actions(text: str) -> tuple[str, Optional[Dict[str, Any]]]:
     action_performed = None
     import re
 
-    match = re.search(r'\[AGREGAR_AGENDA:\s*([^\|\]]+)(?:\|([^\|\]]+))?(?:\|([^\]]+))?\]', text)
-    if match:
+    added = []
+    for match in re.finditer(r'\[AGREGAR_AGENDA:\s*([^\|\]]+)(?:\|([^\|\]]*))?(?:\|([^\]]*))?\]', text):
         title = match.group(1).strip()
-        date_str = match.group(2).strip() if match.group(2) else None
-        time_str = match.group(3).strip() if match.group(3) else None
-
-        item = add_agenda_item(title=title, date_str=date_str, time_str=time_str)
-        action_performed = {"action": "add_agenda", "item": item}
+        if not title:
+            continue
+        added.append(add_agenda_item(title=title, date_str=match.group(2), time_str=match.group(3)))
         text = text.replace(match.group(0), "")
+
+    if added:
+        action_performed = {"action": "add_agenda", "item": added[0], "items": added}
+        print(f"[Agenda] Guardado: {added}", flush=True)
+    elif "AGREGAR_AGENDA" in text:
+        print(f"[Agenda] Etiqueta mal formada, no se guardó nada: {text!r}", flush=True)
 
     return text.strip(), action_performed
 

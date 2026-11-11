@@ -95,7 +95,8 @@ ONLINE = {"groq", "google"}
 
 
 def engine_order():
-    names = [n.strip().lower() for n in os.getenv("STT_ENGINES", "google,vosk").split(",")]
+    raw = os.getenv("STT_ENGINES", "whisper,google,vosk")
+    names = [n.strip().lower() for n in raw.split(",")]
     return [n for n in names if n in ENGINES]
 
 

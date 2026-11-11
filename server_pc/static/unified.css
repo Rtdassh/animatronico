@@ -7,6 +7,7 @@
 .integration-status { padding:12px 0 18px; font-size:13px; line-height:1.7; color:#b8c5d5; }
 .connection-help { padding:18px 0; line-height:1.6; }
 .connection-help a { color:var(--accent-cyan); }
+#assistantWorkspace { display:flex; flex-direction:column; gap:8px; width:100%; flex:1; }
 #hardwareWorkspace { width:100%; }
 #hardwareFrame { width:100%; height:calc(100dvh - 180px); min-height:640px; border:0; background:var(--bg-app); }
 input, textarea, p, code { user-select:text; }

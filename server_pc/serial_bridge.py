@@ -43,7 +43,15 @@ class SerialHardwareBridge:
     def find_available_ports(self):
         if self.preferred_port:
             return [self.preferred_port]
-        return [p.device for p in list_ports.comports() if p.vid == 0x10C4 and p.pid == 0xEA60]
+        ports = []
+        for p in list_ports.comports():
+            if p.vid in (0x2341, 0x1A86, 0x0403):
+                # Arduino Uno directo o clones USB
+                ports.insert(0, p.device)
+            elif p.vid in (0x10C4, 0x303A):
+                # ESP32 CP210x o nativo
+                ports.append(p.device)
+        return ports
 
     def start(self):
         self._running = True
@@ -157,10 +165,23 @@ class SerialHardwareBridge:
             with self._condition:
                 self._result = line.removeprefix("RESULT UNO: ")
                 self._condition.notify_all()
-        if not line.startswith("TELEMETRIA UNO: S,"):
+        elif line.startswith("ACK: "):
+            with self._condition:
+                self._result = line.removeprefix("ACK: ")
+                self._condition.notify_all()
+
+        telemetry_str = None
+        if line.startswith("TELEMETRIA UNO: S,"):
+            telemetry_str = line.split("S,", 1)[1]
+        elif line.startswith("TX UART: S,"):
+            telemetry_str = line.split("S,", 1)[1]
+        elif line.startswith("S,"):
+            telemetry_str = line.split("S,", 1)[1]
+
+        if not telemetry_str:
             return
         try:
-            data = list(map(int, line.split("S,", 1)[1].split(",")))
+            data = list(map(int, telemetry_str.split(",")))
             if len(data) != 12:
                 return
             t, h, flags, s0, s1, auto, uptime, de, se, lm, lcd, pca = data

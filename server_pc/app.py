@@ -21,7 +21,7 @@ from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, UploadFile, File, Form, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, JSONResponse, StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -912,6 +912,27 @@ async def broadcast_to_mobile(payload: Dict[str, Any]):
 # -----------------------------------------------------------------------------
 from unified import create_router
 app.include_router(create_router(lambda: serial_bridge))
+
+@app.middleware("http")
+async def no_cache_web_assets(request, call_next):
+    """Evita que el celular o el túnel de Cloudflare sirvan versiones viejas de la web."""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".js", ".css")):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
+
+
+ASSET_VERSION = str(int(time.time()))
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+async def serve_index():
+    """Sirve index.html con versión en los scripts: cada reinicio fuerza al celular a bajar el JS nuevo."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8").replace("__ASSET_VERSION__", ASSET_VERSION)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+
 
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 

@@ -26,5 +26,54 @@
     "date": "Mañana",
     "time": "16:00",
     "category": "general"
+  },
+  {
+    "id": "item_44c2a0",
+    "title": "Comprar leche",
+    "date": "2026-11-10",
+    "time": "18:00",
+    "category": "general"
+  },
+  {
+    "id": "item_b6af01",
+    "title": "Comprar leche",
+    "date": "2026-11-10",
+    "time": "18:00",
+    "category": "general"
+  },
+  {
+    "id": "item_9fcf73",
+    "title": "Comprar leche",
+    "date": "2026-11-10",
+    "time": "18:00",
+    "category": "general"
+  },
+  {
+    "id": "item_a5dea6",
+    "title": "Conectar dispositivos a red",
+    "date": "2026-11-10",
+    "time": "18:00",
+    "category": "general"
+  },
+  {
+    "id": "item_d2ae52",
+    "title": "Conectar dispositivos a red",
+    "date": "2026-11-11",
+    "time": "",
+    "category": "general"
+  },
+  {
+    "id": "item_a1690c",
+    "title": "Salir a correr",
+    "date": "2026-11-12",
+    "time": "08:00",
+    "category": "general"
+  },
+  {
+    "id": "item_2cea2e",
+    "title": "Conectar dispositivos a red",
+    "date": "2026-11-11",
+    "time": "00:00",
+    "category": "general"
   }
 ]

@@ -95,7 +95,28 @@ let querySilenceTimer = null;
 let followUpTimer = null;
 
 const WAKE_WORDS = [
+  'dom dom',
+  'domdom',
+  'don don',
+  'dondon',
+  'dom don',
+  'don dom',
+  'dum dum',
+  'oye libni',
+  'oye livni',
+  'oye lipni',
+  'oye libny',
+  'hola libni',
+  'libni',
+  'livni',
   'oye hube', // Variante fonética que devuelve el modelo local español.
+  'oye b',    // Google suele transcribir la letra V como "b", "be" o "ve".
+  'oye be',
+  'oye bebe',
+  'oyeb',
+  'oyeve',
+  'hoy ve',
+  'hoy v',
   'oye uve',
   'oye v',
   'oye ve',
@@ -113,8 +134,93 @@ const WAKE_WORDS = [
   'oye robot',
   'hola robot',
   'robot',
-  'despierta'
+  'oye google',
+  'hola google',
+  'google',
+  'despierta',
+  'oye ciclope',
+  'oye cíclope',
+  'asistente',
+  'oye asistente'
 ];
+
+// Reconocimiento de voz: el nativo del navegador (Chrome Android = Google en streaming)
+// cuando hay internet; el local (clips al PC con Vosk/Google del servidor) como respaldo sin red o en Safari.
+let nativeSpeechFailed = false;
+function getSpeechRecognition() {
+  const Native = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (Native && !nativeSpeechFailed && navigator.onLine !== false) return Native;
+  return window.LocalSpeechRecognition || Native;
+}
+
+function markNativeSpeechFailed(recognizer, event) {
+  const isLocal = window.LocalSpeechRecognition && recognizer instanceof window.LocalSpeechRecognition;
+  if (isLocal || nativeSpeechFailed || !window.LocalSpeechRecognition) return false;
+  if (['network', 'service-not-allowed', 'language-not-supported'].includes(event.error)) {
+    console.warn('[Voz] Reconocimiento nativo sin servicio; usando el reconocimiento del PC.');
+    nativeSpeechFailed = true;
+    return true;
+  }
+  return false;
+}
+
+// Normaliza texto eliminando mayúsculas, tildes y puntuación ("¡Dom, dom!" -> "dom dom")
+function normalizeSpeech(text) {
+  return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9ñ]+/g, ' ').trim().replace(/\s+/g, ' ');
+}
+
+// Busca la palabra de activación como palabras completas o patrones fonéticos
+function findWakeWord(transcript) {
+  const norm = normalizeSpeech(transcript);
+  if (!norm) return null;
+  const padded = ` ${norm} `;
+
+  // 1. Patrón DOM DOM: repetición ("dom dom", "don don", "tom tom", "domdom", "ding dong", etc.) o "dom" aislado
+  const domMatch = padded.match(/(?:^|\s)(dom\s*dom|don\s*don|dum\s*dum|tom\s*tom|ton\s*ton|tan\s*tan|dan\s*dan|ding\s*dong|domdom|dondon|dumdum|tomtom|tonton|dom)(?:\s|$)/i);
+  if (domMatch) {
+    const wake = domMatch[1].trim();
+    const idx = padded.indexOf(` ${wake} `);
+    const query = idx !== -1 ? padded.slice(idx + wake.length + 2).trim() : '';
+    return { wake: 'dom dom', detected: wake, query };
+  }
+
+  // 2. Patrón OYE LIBNI: variaciones fonéticas frecuentes en STT (livni, lipni, lidia, lily, living, limni, etc.)
+  const libniMatch = padded.match(/(?:^|\s)(?:(?:oye|hola|hey|ok|ay)\s+)?(libni|livni|lipni|libny|livny|lidia|lily|lili|living|limni|lifni|libi|digni)(?:\s|$)/i);
+  if (libniMatch) {
+    const fullPhrase = libniMatch[0].trim();
+    const idx = padded.indexOf(` ${fullPhrase} `);
+    const query = idx !== -1 ? padded.slice(idx + fullPhrase.length + 2).trim() : '';
+    return { wake: 'oye libni', detected: fullPhrase, query };
+  }
+
+  // 3. Patrón OYE V / V DE VENGANZA (fonéticas: oye ve, oye uve, oye ube, oye b, a ver v)
+  const vMatch = padded.match(/(?:^|\s)(?:(?:oye|hola|hey)\s+(v|ve|uve|ube|b|be)|(?:v|uve)\s+de\s+(venganza|vendetta)|venganza|vendetta|a\s+ver\s+v)(?:\s|$)/i);
+  if (vMatch) {
+    const fullPhrase = vMatch[0].trim();
+    const idx = padded.indexOf(` ${fullPhrase} `);
+    const query = idx !== -1 ? padded.slice(idx + fullPhrase.length + 2).trim() : '';
+    return { wake: 'oye v', detected: fullPhrase, query };
+  }
+
+  // 4. Patrón ROBOT / ASISTENTE / GOOGLE
+  const robotMatch = padded.match(/(?:^|\s)(?:(?:oye|hola|hey)\s+)?(robot|google|asistente|ciclope|despierta)(?:\s|$)/i);
+  if (robotMatch) {
+    const fullPhrase = robotMatch[0].trim();
+    const idx = padded.indexOf(` ${fullPhrase} `);
+    const query = idx !== -1 ? padded.slice(idx + fullPhrase.length + 2).trim() : '';
+    return { wake: robotMatch[1].trim(), detected: fullPhrase, query };
+  }
+
+  // 5. Búsqueda en la lista completa de palabras clave configuradas
+  let best = null;
+  for (const wake of WAKE_WORDS) {
+    const index = padded.indexOf(` ${wake} `);
+    if (index !== -1 && (!best || wake.length > best.wake.length)) best = { wake, index };
+  }
+  if (!best) return null;
+  return { wake: best.wake, detected: best.wake, query: padded.slice(best.index + best.wake.length + 2).trim() };
+}
 
 // Música de fondo clásica de Loquendo
 const loquendoBgm = document.getElementById('loquendoBgm');
@@ -124,8 +230,7 @@ const sliderBgmVol = document.getElementById('sliderBgmVol');
 const valBgmVol = document.getElementById('valBgmVol');
 
 let isBgmEnabled = localStorage.getItem('loquendo_bgm_enabled') !== 'false';
-const BGM_MAX_VOLUME = 0.25;
-let bgmVolume = Math.min(BGM_MAX_VOLUME, parseFloat(localStorage.getItem('loquendo_bgm_vol') || '0.08'));
+let bgmVolume = parseFloat(localStorage.getItem('loquendo_bgm_vol') || '0.15');
 let bgmFadeTimer = null;
 
 // Variables de Estado
@@ -502,6 +607,7 @@ function exportWAV(samples, sampleRate) {
 
   return new Blob([view], { type: 'audio/wav' });
 }
+window.exportWAV = exportWAV;
 
 // ============================================================================
 // 6. GRABACIÓN DE MICRÓFONO DIRECTO POR WEB AUDIO API
@@ -821,12 +927,8 @@ async function playVoiceResponse(audioUrl, audioBase64, responseText) {
 
   if (alexaModeEnabled) {
     setAlexaUIState('SPEAKING');
-    // Escuchar activamente mientras habla para permitir interrupción (barge-in)
-    setTimeout(() => {
-      if (alexaModeEnabled && alexaState === 'SPEAKING') {
-        startQueryListening(true);
-      }
-    }, 250);
+    // Detener el micrófono mientras el asistente habla para evitar auto-interrupción y eco del altavoz
+    stopAllAlexaRecognition();
   }
 
   const srcToUse = audioUrl || audioBase64;
@@ -890,12 +992,6 @@ async function playVoiceResponse(audioUrl, audioBase64, responseText) {
   audioPlayer.onended = () => {
     finishPlayback();
   };
-}
-
-if (audioPlayer) {
-  audioPlayer.addEventListener('pause', () => {
-    if (!audioPlayer.ended) stopLoquendoBgm(true);
-  });
 }
 
 function finishPlayback() {
@@ -1209,7 +1305,7 @@ function sendManualMove(m, e, ev, b) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 // Controles del Módulo de Visión Artificial
@@ -1263,7 +1359,7 @@ function initAlexaMode() {
     prefetchAudio.preload = 'auto';
   } catch (_) { }
 
-  const SpeechRecognition = window.LocalSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition = getSpeechRecognition();
   if (!SpeechRecognition) {
     if (alexaDesc) alexaDesc.textContent = 'Navegador sin soporte de voz WebSpeech';
     if (btnToggleAlexa) btnToggleAlexa.disabled = true;
@@ -1288,6 +1384,9 @@ function toggleAlexaMode() {
     btnToggleAlexa.classList.remove('running');
     if (alexaBtnLabel) alexaBtnLabel.textContent = 'Iniciar Manos Libres';
     stopAllAlexaRecognition();
+    if (window.LocalSpeechRecognition && window.LocalSpeechRecognition.releaseMic) {
+      window.LocalSpeechRecognition.releaseMic();
+    }
     setAlexaUIState('DISABLED');
   }
 }
@@ -1303,9 +1402,9 @@ function setAlexaUIState(state) {
     case 'LISTENING_WAKE':
       alexaModeBar.classList.add('listening');
       alexaDot.classList.add('active');
-      if (alexaTitle) alexaTitle.textContent = 'Manos Libres · Oye V';
-      alexaDesc.textContent = 'Comando: "Oye V" / "Oye Uve"';
-      statusCaption.textContent = 'Esperando "Oye V"...';
+      if (alexaTitle) alexaTitle.textContent = 'Manos Libres Activo';
+      alexaDesc.textContent = 'Comandos: "Dom Dom" · "Oye Libni" · "Oye V"';
+      statusCaption.textContent = 'Esperando "Dom Dom", "Oye Libni" u "Oye V"...';
       break;
 
     case 'WAKE_TRIGGERED':
@@ -1334,8 +1433,8 @@ function setAlexaUIState(state) {
     case 'SPEAKING':
       alexaModeBar.classList.add('wake-triggered');
       alexaDot.classList.add('hearing');
-      if (alexaTitle) alexaTitle.textContent = 'V respondiendo (puedes hablar)';
-      alexaDesc.textContent = 'Escuchando por si deseas interrumpir...';
+      if (alexaTitle) alexaTitle.textContent = 'V respondiendo';
+      alexaDesc.textContent = 'Reproduciendo respuesta...';
       break;
 
     case 'FOLLOW_UP':
@@ -1349,7 +1448,7 @@ function setAlexaUIState(state) {
     case 'DISABLED':
     default:
       if (alexaTitle) alexaTitle.textContent = 'Invocación Manos Libres';
-      alexaDesc.textContent = 'Comando: "Oye V" / "Oye Uve"';
+      alexaDesc.textContent = 'Comandos: "Dom Dom" · "Oye Libni" · "Oye V"';
       statusCaption.textContent = 'Listo';
       break;
   }
@@ -1359,7 +1458,7 @@ function startWakeWordRecognition() {
   if (!alexaModeEnabled) return;
   stopAllAlexaRecognition();
 
-  const SpeechRecognition = window.LocalSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition = getSpeechRecognition();
   if (!SpeechRecognition) return;
 
   try {
@@ -1374,14 +1473,17 @@ function startWakeWordRecognition() {
       if (alexaState !== 'LISTENING_WAKE') return;
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript.trim().toLowerCase();
-
-        const detected = WAKE_WORDS.some(w => transcript.includes(w));
-        if (detected) {
-          const wake = WAKE_WORDS.find(w => transcript.includes(w));
-          const query = transcript.slice(transcript.indexOf(wake) + wake.length).trim();
-          if (query) { stopAllAlexaRecognition(); commitQuery(query); }
-          else handleWakeWordDetected();
+        const transcript = event.results[i][0].transcript;
+        const match = findWakeWord(transcript);
+        console.log('[WakeWord] Oído:', JSON.stringify(transcript), match ? `→ activación "${match.wake}" (detectado: "${match.detected}")` : '→ sin activación');
+        if (match) {
+          const query = match.query;
+          if (query) {
+            stopAllAlexaRecognition();
+            commitQuery(query);
+          } else {
+            handleWakeWordDetected();
+          }
           break;
         }
       }
@@ -1389,31 +1491,41 @@ function startWakeWordRecognition() {
 
     wakeWordRecognizer.onerror = (e) => {
       console.warn('[WakeWord Recognition Error]', e.error);
-      if (e.error === "not-allowed") {
-        if (alexaModeEnabled) toggleAlexaMode();
-        alexaDesc.textContent = e.message || "Permiso de micrófono denegado. Revisa HTTPS y los permisos.";
+      if (markNativeSpeechFailed(wakeWordRecognizer, e)) {
+        setTimeout(startWakeWordRecognition, 300);
         return;
       }
-      if (alexaModeEnabled && alexaState === 'LISTENING_WAKE') {
-        setTimeout(() => {
-          if (alexaModeEnabled && alexaState === 'LISTENING_WAKE') {
-            try { wakeWordRecognizer.start(); } catch (_) { }
-          }
-        }, 1000);
+      if (e.error === 'not-allowed') {
+        if (alexaModeEnabled) toggleAlexaMode();
+        alexaDesc.textContent = e.message || 'Permiso de micrófono denegado. Revisa HTTPS y los permisos.';
+        return;
       }
+      // Los errores transitorios como 'no-speech' son seguidos de onend automáticamente
     };
 
     wakeWordRecognizer.onend = () => {
       if (alexaModeEnabled && alexaState === 'LISTENING_WAKE') {
-        try {
-          wakeWordRecognizer.start();
-        } catch (_) { }
+        setTimeout(() => {
+          if (alexaModeEnabled && alexaState === 'LISTENING_WAKE') {
+            try {
+              wakeWordRecognizer.start();
+            } catch (err) {
+              console.warn('[WakeWord reiniciando nueva sesión]', err);
+              startWakeWordRecognition();
+            }
+          }
+        }, 150);
       }
     };
 
     wakeWordRecognizer.start();
   } catch (err) {
     console.warn('[WakeWord start error]', err);
+    setTimeout(() => {
+      if (alexaModeEnabled && alexaState === 'LISTENING_WAKE') {
+        startWakeWordRecognition();
+      }
+    }, 400);
   }
 }
 
@@ -1471,7 +1583,7 @@ function speakGreetingPrompt(text = "¡Dime!") {
     }
 
     try {
-      const selectedVoice = (voiceSelect && voiceSelect.value) ? voiceSelect.value : 'jorge';
+      const selectedVoice = (voiceSelect && voiceSelect.value) ? voiceSelect.value : 'windows_local';
       const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&voice=${selectedVoice}`;
       const audio = new Audio(audioUrl);
       currentGreetingAudio = audio;
@@ -1491,8 +1603,8 @@ function speakGreetingPrompt(text = "¡Dime!") {
         finish();
       };
 
-      // Tiempo límite de seguridad ultracorto (1.2 segundos para audio de 0.5s)
-      setTimeout(finish, 1200);
+      // Tiempo límite de seguridad generoso para permitir carga y reproducción completa
+      setTimeout(finish, 3000);
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -1513,11 +1625,11 @@ function startQueryListening(isBargeIn = false, isFollowUp = false) {
   stopGreetingAudio(); // Garantizar silencio antes de activar el micrófono
   if (!alexaModeEnabled) return;
 
-  if (!isBargeIn && !isFollowUp) {
+  if (!isFollowUp) {
     setAlexaUIState('LISTENING_QUERY');
   }
 
-  const SpeechRecognition = window.LocalSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition = getSpeechRecognition();
   if (!SpeechRecognition) return;
 
   // Si ya hay un queryRecognizer activo, detenerlo limpiamente antes de reiniciar
@@ -1537,6 +1649,16 @@ function startQueryListening(isBargeIn = false, isFollowUp = false) {
     queryRecognizer.lang = 'es-ES';
 
     let finalTranscript = '';
+    let speechDetected = false;
+
+    // Timeout de seguridad si el usuario no dice nada (7 segundos)
+    let queryTimeout = setTimeout(() => {
+      if (alexaModeEnabled && !speechDetected && (alexaState === 'LISTENING_QUERY' || alexaState === 'FOLLOW_UP')) {
+        console.log('[Alexa] Tiempo de espera de consulta agotado sin voz.');
+        stopAllAlexaRecognition();
+        startWakeWordRecognition();
+      }
+    }, 7000);
 
     queryRecognizer.onresult = (event) => {
       let interim = '';
@@ -1550,18 +1672,11 @@ function startQueryListening(isBargeIn = false, isFollowUp = false) {
 
       const currentText = (finalTranscript || interim).trim();
       if (currentText && currentText.length > 1) {
-        // Interrumpir habla si el asistente estaba hablando (barge-in durante habla)
-        if (audioPlayer && !audioPlayer.paused) {
-          try { audioPlayer.pause(); } catch (_) { }
+        speechDetected = true;
+        if (queryTimeout) {
+          clearTimeout(queryTimeout);
+          queryTimeout = null;
         }
-        if (currentWebAudioSource) {
-          try { currentWebAudioSource.stop(); } catch (_) { }
-        }
-        stopLoquendoBgm(true);
-        document.body.classList.remove('speaking');
-        sendLipsyncFrame(90);
-
-        // Si estaba en la ventana de 3 segundos de seguimiento, cancelar el temporizador
         if (followUpTimer) {
           clearTimeout(followUpTimer);
           followUpTimer = null;
@@ -1586,28 +1701,27 @@ function startQueryListening(isBargeIn = false, isFollowUp = false) {
       console.warn('[Query Recognition Error]', e.error);
       if (finalTranscript.trim()) {
         commitQuery(finalTranscript.trim());
-      } else {
-        if (alexaState === 'SPEAKING' || (alexaState === 'FOLLOW_UP' && followUpTimer !== null)) {
-          return; // No cortar si aún está hablando o en la ventana de 3 segundos
-        }
-        if (alexaState === 'LISTENING_QUERY') {
-          onPlaybackCompletedAlexa();
-        }
       }
     };
 
     queryRecognizer.onend = () => {
+      if (queryTimeout) {
+        clearTimeout(queryTimeout);
+        queryTimeout = null;
+      }
       if (finalTranscript.trim()) {
         commitQuery(finalTranscript.trim());
       } else if (alexaModeEnabled) {
-        if (alexaState === 'SPEAKING') {
-          // Mantener micrófono vivo durante la reproducción de audio para permitir interrupción
-          try { queryRecognizer.start(); } catch (_) { }
-        } else if (alexaState === 'FOLLOW_UP' && followUpTimer !== null) {
-          // Mantener micrófono vivo durante la ventana de 3 segundos
-          try { queryRecognizer.start(); } catch (_) { }
+        if (alexaState === 'FOLLOW_UP' && followUpTimer !== null) {
+          setTimeout(() => {
+            if (alexaModeEnabled && alexaState === 'FOLLOW_UP') {
+              try { queryRecognizer.start(); } catch (_) { startQueryListening(false, true); }
+            }
+          }, 150);
         } else if (alexaState === 'LISTENING_QUERY') {
-          onPlaybackCompletedAlexa();
+          // Si no se escuchó ninguna voz durante la consulta, volver a esperar "Oye V"
+          stopAllAlexaRecognition();
+          startWakeWordRecognition();
         }
       }
     };
@@ -1615,8 +1729,9 @@ function startQueryListening(isBargeIn = false, isFollowUp = false) {
     queryRecognizer.start();
   } catch (err) {
     console.warn('[Query Start Error]', err);
-    if (alexaState === 'LISTENING_QUERY') {
-      onPlaybackCompletedAlexa();
+    if (alexaModeEnabled) {
+      stopAllAlexaRecognition();
+      startWakeWordRecognition();
     }
   }
 }
@@ -1633,9 +1748,9 @@ async function commitQuery(text) {
     return;
   }
 
-  // Filtrar posibles invocaciones al inicio de la frase (ej: "oye v dime la hora")
+  // Filtrar posibles invocaciones al inicio de la frase (ej: "oye libni dime la hora", "dom dom enciende la luz")
   let cleanText = text.trim();
-  cleanText = cleanText.replace(/^(oye\s+v|oye\s+uve|oye\s+ve|hola\s+v|hola\s+uve|v\s+de\s+venganza|venganza|uve)\s*[,:]?\s*/i, '').trim();
+  cleanText = cleanText.replace(/^(dom\s*dom|don\s*don|dum\s*dum|tom\s*tom|ton\s*ton|domdom|dondon|dom|oye\s+libni|hola\s+libni|libni|livni|lipni|libny|livny|lidia|lily|lili|living|oye\s+lidia|oye\s+lily|oye\s+living|oye\s+v|oye\s+uve|oye\s+ve|oye\s+b|oye\s+be|hola\s+v|hola\s+uve|v\s+de\s+venganza|venganza|uve|oye\s+robot|hola\s+robot|robot|oye\s+google|hola\s+google|google|despierta|oye\s+ciclope|oye\s+asistente|asistente)\s*[,:]?\s*/i, '').trim();
   if (!cleanText) cleanText = text.trim();
 
   setAlexaUIState('PROCESSING');
@@ -1650,18 +1765,16 @@ function onPlaybackCompletedAlexa() {
     followUpTimer = null;
   }
 
-  // Cambiar estado a FOLLOW_UP (conversación abierta)
+  // Cambiar estado a FOLLOW_UP (conversación abierta tras terminar la respuesta)
   setAlexaUIState('FOLLOW_UP');
 
-  // Asegurar que el reconocedor de consultas continúe o se active para la réplica
-  if (!queryRecognizer) {
-    startQueryListening(false, true);
-  }
+  // Activar la escucha limpia para la réplica del usuario
+  startQueryListening(false, true);
 
-  // Ventana de 3 segundos: si no hay nuevos inputs en 3s, corta la conversación y vuelve a esperar "Oye V"
+  // Ventana de seguimiento: 7 segundos sin hablar para volver a esperar "Oye V"
   followUpTimer = setTimeout(() => {
     if (alexaModeEnabled && alexaState === 'FOLLOW_UP') {
-      console.log('[Alexa] Ventana de 3 segundos expirada sin nuevos inputs. Sesión finalizada.');
+      console.log('[Alexa] Ventana de 7 segundos expirada. Volviendo a esperar activación.');
       stopAllAlexaRecognition();
       startWakeWordRecognition();
     }

@@ -3,9 +3,9 @@ import re
 import os
 from typing import Dict, Any, List, Optional
 try:
-    from agent_tools import get_current_datetime_info, get_agenda_summary_for_today, load_agenda
+    from agent_tools import get_current_datetime_info, get_agenda_summary_for_today, load_agenda, get_upcoming_agenda_text
 except ImportError:
-    from server_pc.agent_tools import get_current_datetime_info, get_agenda_summary_for_today, load_agenda
+    from server_pc.agent_tools import get_current_datetime_info, get_agenda_summary_for_today, load_agenda, get_upcoming_agenda_text
 
 OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
 DEFAULT_MODEL = "qwen2.5:7b"
@@ -77,7 +77,10 @@ def build_system_prompt(temperature: Optional[float] = None, humidity: Optional[
     temp_str = f"{temperature:.1f} °C" if temperature is not None else "sin lectura"
     hum_str = f"{humidity:.0f} %" if humidity is not None else "sin lectura"
     dt_info = get_current_datetime_info()
-    agenda_str = get_agenda_summary_for_today()
+    agenda_str = get_upcoming_agenda_text()
+    import datetime
+    hoy = datetime.date.today()
+    manana = (hoy + datetime.timedelta(days=1)).isoformat()
 
     return (
         "Eres 'V de Venganza', pero reencarnado en una cabeza animatrónica física dotada de servomotores y voz de Loquendo, "
@@ -100,13 +103,17 @@ def build_system_prompt(temperature: Optional[float] = None, humidity: Optional[
         "HERRAMIENTAS DE AGENTE EN TIEMPO REAL:\n"
         f"- Fecha y hora actual del sistema: {dt_info['texto_fecha']}\n"
         f"- Conmemoración histórica: {dt_info['nov5_note']}\n"
-        f"- Agenda y compromisos de hoy: {agenda_str}\n"
+        f"- Agenda (próximos 7 días): {agenda_str}\n"
         f"- Sensores del laboratorio: Temperatura {temp_str}, Humedad {hum_str}, Luz de laboratorio {light_str}.\n\n"
         "COMANDOS FÍSICOS:\n"
         "- Si el usuario te pide encender la luz: incluye [LUZ_ON] ('¡Que la luz rasgue las tinieblas, ejecuten como administrador XD!').\n"
         "- Si te pide apagar la luz: incluye [LUZ_OFF] ('Las sombras vuelven a protegernos, pero no le di importancia JAJAJAJA').\n"
         "- Si te pide parpadear: incluye [BLINK] ('Un guiño a prueba de balas XD XD').\n"
-        "- Si te pide agendar algo: incluye [AGREGAR_AGENDA: Tarea|Fecha|Hora] ('Queda anotado en el archivo comprimido sin contraseña').\n"
+        "- Si te pide agendar, anotar o recordar algo: incluye UNA etiqueta [AGREGAR_AGENDA: descripción real|AAAA-MM-DD|HH:MM] "
+        "con lo que pidió el usuario (nunca la palabra 'Tarea'), la fecha en formato AAAA-MM-DD y la hora en 24 h. "
+        f"Hoy es {hoy.isoformat()} y mañana es {manana}. Si no dice hora, deja la hora vacía. "
+        f"Ejemplo: 'recuérdame comprar pan mañana a las 4 de la tarde' -> [AGREGAR_AGENDA: Comprar pan|{manana}|16:00] "
+        "('Queda anotado en el archivo comprimido sin contraseña').\n"
     )
 
 def query_fallback(prompt: str, temperature: Optional[float], humidity: Optional[float], light_state: int) -> str:
@@ -118,10 +125,13 @@ def query_fallback(prompt: str, temperature: Optional[float], humidity: Optional
     if any(w in p for w in ["hora", "fecha", "dia", "cuándo", "hoy", "año"]):
         nov_part = f" {dt_info['nov5_note']}" if dt_info['nov5_note'] else ""
         return f"Hola amigos de YouTube, hoy les traigo la fecha exacta: {dt_info['texto_fecha']}{nov_part} Sin nada más que agregar, continuemos XD XD."
+    elif any(w in p for w in ["anota", "agendar", "agéndame", "agendame", "agenda una", "agenda un", "recuérdame", "recuerdame", "apunta", "guarda"]):
+        import re
+        hora = re.search(r"a las? \d{1,2}(?::\d{2})?(?: y (?:media|cuarto))?(?:\s*(?:de la (?:mañana|tarde|noche)|pm|am|p\.m\.|a\.m\.))?", p)
+        titulo = prompt.replace("|", " ").replace("]", " ").strip()
+        return f"[AGREGAR_AGENDA: {titulo}|{titulo}|{hora.group(0) if hora else ''}] Le dan extraer aquí a este compromiso y queda guardado en el archivo WinRAR del destino, XD XD XD."
     elif any(w in p for w in ["agenda", "planes", "citas", "compromisos", "tareas", "pendiente"]):
-        return f"El link de vuestra agenda está en la descripción del video por Mediafire: {agenda_str} Yo no lo descargo porque ya lo tengo, JAJAJAJA."
-    elif any(w in p for w in ["anota", "agenda", "recuerda", "apunta", "guarda"]):
-        return f"[AGREGAR_AGENDA: {prompt}] Le dan extraer aquí a este compromiso y queda guardado en el archivo WinRAR del destino, XD XD XD."
+        return f"El link de vuestra agenda está en la descripción del video por Mediafire: {get_upcoming_agenda_text()} Yo no lo descargo porque ya lo tengo, JAJAJAJA."
     elif any(w in p for w in ["temperatura", "grados", "calor", "frio", "clima", "humedad", "ambiente"]):
         if temperature is None or humidity is None:
             temp_str = f"{temperature:.1f} grados Celsius" if temperature is not None else "sin lectura"
