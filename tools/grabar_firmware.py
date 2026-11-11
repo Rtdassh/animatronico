@@ -36,6 +36,8 @@ def find_arduino_cli() -> str:
         return cli
     
     candidates = [
+        BASE_DIR / "build" / "eyemech-tools" / "arduino-cli.exe",
+        BASE_DIR / "build" / "eyemech-tools" / "arduino-cli",
         Path.home() / ".local" / "bin" / "arduino-cli",
         Path.home() / ".local" / "bin" / "arduino-cli.exe",
         Path("/usr/local/bin/arduino-cli"),
@@ -43,12 +45,15 @@ def find_arduino_cli() -> str:
         Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "arduino-cli" / "arduino-cli.exe",
     ]
     for c in candidates:
-        if c.exists() and os.access(c, os.X_OK):
+        if c.exists() and (sys.platform.startswith("win") or os.access(c, os.X_OK)):
             return str(c)
     
     return "arduino-cli"
 
 ARDUINO_CLI = find_arduino_cli()
+
+CONFIG_YAML = BASE_DIR / "build" / "eyemech-tools" / "arduino-cli.yaml"
+CLI_BASE_ARGS = ["--config-file", str(CONFIG_YAML)] if CONFIG_YAML.exists() else []
 
 def get_connected_ports():
     """Detecta puertos serie conectados mediante arduino-cli y enumeración del sistema."""
@@ -57,7 +62,7 @@ def get_connected_ports():
     # 1. Consulta a arduino-cli en formato JSON
     try:
         proc = subprocess.run(
-            [ARDUINO_CLI, "board", "list", "--format", "json"],
+            [ARDUINO_CLI] + CLI_BASE_ARGS + ["board", "list", "--format", "json"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -99,8 +104,8 @@ def compilar_firmware(target: str) -> bool:
     """Compila y exporta binarios para el microcontrolador seleccionado."""
     if target in ("arduino", "all"):
         print("[COMPILANDO] Arduino Uno R3 (ATmega328P)...")
-        cmd = [
-            ARDUINO_CLI, "compile",
+        cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+            "compile",
             "--fqbn", FQBN_ARDUINO,
             "--output-dir", str(ARDUINO_BIN_DIR),
             str(ARDUINO_SKETCH_DIR)
@@ -113,8 +118,8 @@ def compilar_firmware(target: str) -> bool:
 
     if target in ("esp32", "all"):
         print("[COMPILANDO] ESP32 DevKit V1...")
-        cmd = [
-            ARDUINO_CLI, "compile",
+        cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+            "compile",
             "--fqbn", FQBN_ESP32,
             "--output-dir", str(ESP32_BIN_DIR),
             str(ESP32_SKETCH_DIR)
@@ -137,8 +142,8 @@ def grabar_arduino(port: str) -> bool:
     if not compilar_firmware("arduino"):
         return False
 
-    cmd = [
-        ARDUINO_CLI, "upload",
+    cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+        "upload",
         "-p", port,
         "--fqbn", FQBN_ARDUINO,
         "--input-dir", str(ARDUINO_BIN_DIR)
@@ -167,8 +172,8 @@ def grabar_esp32(port: str) -> bool:
 
     print("[AVISO] Si la conexión se detiene en 'Connecting....._____.....', mantén pulsado el botón 'BOOT' en la placa ESP32.")
     
-    cmd = [
-        ARDUINO_CLI, "upload",
+    cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+        "upload",
         "-p", port,
         "--fqbn", FQBN_ESP32,
         "--input-dir", str(ESP32_BIN_DIR)

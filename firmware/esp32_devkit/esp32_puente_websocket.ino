@@ -164,14 +164,19 @@ void setup() {
   // Conectar a la red inalámbrica
   connectWiFi();
 
-  // Configuración del cliente WebSocket hacia la PC
+  // Determinar dinámicamente la IP de la laptop:
+  // Si estamos conectados a la Zona con cobertura móvil (Hotspot) de la PC,
+  // la PC es la puerta de enlace (Gateway IP: 192.168.137.1).
+  IPAddress targetIP = WiFi.gatewayIP();
+  String serverHost = (targetIP[0] != 0 && targetIP[0] != 255) ? targetIP.toString() : String(PC_SERVER_IP);
+
   Serial.print(F("[WS] Configurando cliente hacia: ws://"));
-  Serial.print(PC_SERVER_IP);
+  Serial.print(serverHost);
   Serial.print(F(":"));
   Serial.print(PC_PORT);
   Serial.println(WS_PATH);
 
-  webSocket.begin(PC_SERVER_IP, PC_PORT, WS_PATH);
+  webSocket.begin(serverHost.c_str(), PC_PORT, WS_PATH);
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(2000); // Reintentar reconexión cada 2 segundos
   webSocket.enableHeartbeat(5000, 3000, 2); // Mantener enlace activo

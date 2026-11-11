@@ -5,14 +5,19 @@ REM ============================================================================
 chcp 65001 >nul
 title Grabador Arduino Uno R3
 
+set "PY_CMD=python"
+if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PY_CMD=%~dp0.venv\Scripts\python.exe"
+)
+
 set PORT=%~1
 if "%PORT%"=="" (
     echo ==================================================
     echo  GRABACIÓN DE ARDUINO UNO R3
     echo ==================================================
-    arduino-cli board list 2>nul
+    "%PY_CMD%" "%~dp0tools\grabar_firmware.py" --list 2>nul
     echo.
-    set /p PORT="Introduce el puerto COM (ejemplo: COM3): "
+    set /p PORT="Introduce el puerto COM (ejemplo: COM7): "
 )
 
 if "%PORT%"=="" (
@@ -21,7 +26,7 @@ if "%PORT%"=="" (
     exit /b 1
 )
 
-python "%~dp0tools\grabar_firmware.py" --arduino "%PORT%"
+"%PY_CMD%" "%~dp0tools\grabar_firmware.py" --arduino "%PORT%"
 if errorlevel 1 (
     echo [ERROR] Hubo un problema al grabar.
     pause
@@ -30,4 +35,3 @@ if errorlevel 1 (
 echo [OK] Grabación finalizada.
 pause
 exit /b 0
-
