@@ -1,325 +1,238 @@
-/**
- * ============================================================================
- * PROYECTO: Cabeza Animatrónica con IA Local
- * NODO: Arduino Uno R3 (Maestro I2C y Telemetría)
- * CONTROLADOR DE SERVOS: PCA9685 16 Canales PWM (I2C: 0x40)
- * MECANISMO OCULAR: Epsilon 3.2 (Will Cogley - MakerWorld #1184807)
- * AUDIO I/O: Teléfono Móvil Manos Libres (Micrófono + Altavoz vía Wi-Fi / WebSockets)
- * ÁREA: Sistemas Embebidos y Robótica
- * ============================================================================
- * 
- * DISTRIBUCIÓN OFICIAL DE PINES:
- *   - Pin D2   : SoftwareSerial RX (desde ESP32 TX2 / GPIO 17 - 3.3V)
- *   - Pin D3   : SoftwareSerial TX (hacia Divisor Resistivo 1k/2k -> ESP32 RX2)
- *   - Pin D4   : DATA Sensor de Humedad DHT11
- *   - Pin D7   : Control LED Indicador de Luz (con resistencia 220 Ohm)
- *   - Pin D10  : LIBRE (Audio procesado de forma inalámbrica por Smartphone)
- *   - Pin D11  : LIBRE (Audio procesado de forma inalámbrica por Smartphone)
- *   - Pin A4   : SDA Bus I2C Compartido (PCA9685: 0x40 y LM75A: 0x48)
- *   - Pin A5   : SCL Bus I2C Compartido (Reloj I2C a 400 kHz)
- *   - Pin 5V   : VCC exclusivo para lógica de sensores LM75A, DHT11 y lógica PCA9685
- *   - Pin GND  : Tierra común (unida a ESP32 y Fuente 5V 4A)
- * 
- * MAPEO DE CANALES EN CONTROLADOR PCA9685 (I2C: 0x40):
- *   - Canal 0  : M1 · Ojos Eje Horizontal (Pan / Yaw: 60° a 120°, neutro 90°)
- *   - Canal 1  : M2 · Ojos Eje Vertical (Tilt / Pitch: 70° a 110°, neutro 90°)
- *   - Canal 2  : M3 · Párpado Superior Izquierdo (45° cerrado a 100° abierto)
- *   - Canal 3  : M4 · Párpado Inferior Izquierdo (80° reposo a 110° elevado)
- *   - Canal 4  : M5 · Párpado Superior Derecho (45° cerrado a 100° abierto)
- *   - Canal 5  : M6 · Párpado Inferior Derecho (80° reposo a 110° elevado)
- *   - Canales 6-15 : Libres para expansión futura
- * ============================================================================
- */
-
+// Arduino Uno R3: seis servos EyeMech ε3.2, PCA9685 y DHT11.
 #include <Wire.h>
 #include <Adafruit_PWMServoDriver.h>
 #include <DHT.h>
 #include <SoftwareSerial.h>
 
-// ----------------------------------------------------------------------------
-// CONFIGURACIÓN DE PINES Y CONSTANTES
-// ----------------------------------------------------------------------------
-#define PIN_SW_RX          2
-#define PIN_SW_TX          3
-#define PIN_DHT            4
-#define PIN_LED            7
+constexpr uint8_t PIN_SW_RX = 2;
+constexpr uint8_t PIN_SW_TX = 3;
+constexpr uint8_t PIN_DHT = 4;
+constexpr uint8_t PIN_LED = 7;
+constexpr uint8_t PIN_RUN = 8;  // Abierto = Hold, cerrado a GND = Move.
+constexpr uint8_t PCA9685_ADDR = 0x40;
+constexpr unsigned long UART_BAUD = 38400;
+constexpr unsigned long TELEMETRY_MS = 3500;
+constexpr unsigned long BLINK_MS = 140;
+constexpr unsigned long IDLE_MS = 6500;
+constexpr unsigned long RUN_DEBOUNCE_MS = 50;
 
-#define DHTTYPE DHT11
-#define LM75_ADDR 0x48
-#define PCA9685_ADDR 0x40
+enum Channel : uint8_t { LR, UD, TL, BL, TR, BR, SERVO_COUNT };
 
-// Asignación de canales en PCA9685
-#define PCA_CH_EYE_H       0   // M1: Horizontal (Pan)
-#define PCA_CH_EYE_V       1   // M2: Vertical (Tilt)
-#define PCA_CH_LID_TL      2   // M3: Párpado Sup. Izquierdo
-#define PCA_CH_LID_BL      3   // M4: Párpado Inf. Izquierdo
-#define PCA_CH_LID_TR      4   // M5: Párpado Sup. Derecho
-#define PCA_CH_LID_BR      5   // M6: Párpado Inf. Derecho
+struct ServoCalibration {
+  uint8_t minAngle;
+  uint8_t maxAngle;
+  uint8_t holdAngle;
+  uint8_t openAngle;  // Solo se usa para los párpados.
+  uint16_t minPulseUs;  // Pulso equivalente a 0° antes de limitar el ángulo.
+  uint16_t maxPulseUs;  // Pulso equivalente a 180° antes de limitar el ángulo.
+};
 
-// Configuración de pulsos PWM para PCA9685 (12 bits: 0 a 4095 a 50Hz)
-#define SERVOMIN  120 // Longitud de pulso min (~550 us, 0 deg)
-#define SERVOMAX  500 // Longitud de pulso max (~2400 us, 180 deg)
+// Orden del manual (L/R, U/D, TL, BL, TR, BR). Hold a 90°.
+// TL y BR abren al aumentar el ángulo, BL y TR al disminuirlo.
+// Los recorridos de puesta en marcha son deliberadamente reducidos.
+const ServoCalibration SERVOS[SERVO_COUNT] = {
+  // mín, máx, Hold, abierto, pulso 0°, pulso 180°
+  {   60, 120,   90,     90,     1000,       2000 },  // CH0 L/R
+  {   70, 110,   90,     90,     1000,       2000 },  // CH1 U/D
+  {   90, 110,   90,    110,     1000,       2000 },  // CH2 TL
+  {   70,  90,   90,     70,     1000,       2000 },  // CH3 BL
+  {   70,  90,   90,     70,     1000,       2000 },  // CH4 TR
+  {   90, 110,   90,    110,     1000,       2000 },  // CH5 BR
+};
 
-// Límites físicos de seguridad de los servomotores ε3.2
-const int EYE_H_MIN       = 60;
-const int EYE_H_MAX       = 120;
-const int EYE_H_NEUTRAL   = 90;
-
-const int EYE_V_MIN       = 70;
-const int EYE_V_MAX       = 110;
-const int EYE_V_NEUTRAL   = 90;
-
-const int LID_TOP_CLOSED  = 45;
-const int LID_TOP_OPEN    = 90;
-const int LID_TOP_WIDE    = 100;
-
-const int LID_BOT_REST    = 80;
-const int LID_BOT_SQUINT  = 105;
-
-// Temporizaciones asíncronas (millis)
-const unsigned long TELEMETRY_INTERVAL_MS = 3500; // Enviar telemetría espaciada cada 3.5s
-const unsigned long BLINK_DURATION_MS     = 140;  // Duración párpado cerrado
-const unsigned long IDLE_SACCADE_TIMEOUT  = 6500; // Miradas aleatorias si no hay comandos
-
-// Tasa de baudios optimizada para SoftwareSerial (38400 bps)
-#define SW_SERIAL_BAUD 38400
-
-// ----------------------------------------------------------------------------
-// INSTANCIAS DE OBJETOS
-// ----------------------------------------------------------------------------
 SoftwareSerial espSerial(PIN_SW_RX, PIN_SW_TX);
-DHT dht(PIN_DHT, DHTTYPE);
-Adafruit_PWMServoDriver pca = Adafruit_PWMServoDriver(PCA9685_ADDR);
+DHT dht(PIN_DHT, DHT11);  // Cambiar a DHT22 únicamente si se monta ese modelo.
+Adafruit_PWMServoDriver pca(PCA9685_ADDR);
 
-// ----------------------------------------------------------------------------
-// VARIABLES GLOBALES DE ESTADO
-// ----------------------------------------------------------------------------
-String inputBuffer = "";
+struct CommandBuffer {
+  char text[64];
+  uint8_t length = 0;
+  bool overflow = false;
+};
+
+CommandBuffer espInput, usbInput;
+bool pcaReady = false;
+bool moving = false;
+bool blinking = false;
+int eyeH = SERVOS[LR].holdAngle;
+int eyeV = SERVOS[UD].holdAngle;
+int lidOpening = 100;
+unsigned long lastHoldTime = 0;
 unsigned long lastTelemetryTime = 0;
 unsigned long lastCommandTime = 0;
+unsigned long blinkStarted = 0;
+unsigned long nextBlink = 0;
+unsigned long nextSaccade = 0;
 
-// Variables para parpadeo autónomo
-unsigned long nextBlinkTime = 0;
-bool isBlinking = false;
-unsigned long blinkStartTime = 0;
-
-// Variables para micro-sacadas oculares (vida autónoma)
-unsigned long nextSaccadeTime = 0;
-int currentEyeHPos = EYE_H_NEUTRAL;
-int currentEyeVPos = EYE_V_NEUTRAL;
-
-// ============================================================================
-// FUNCIONES AUXILIARES DE CONVERSIÓN DE ÁNGULO A PULSO PCA9685
-// ============================================================================
-
-int angleToPulse(int angle) {
-  angle = constrain(angle, 0, 180);
-  return map(angle, 0, 180, SERVOMIN, SERVOMAX);
+void setServoAngle(uint8_t channel, long angle) {
+  const ServoCalibration &servo = SERVOS[channel];
+  angle = constrain(angle, servo.minAngle, servo.maxAngle);
+  pca.writeMicroseconds(channel, map(angle, 0, 180, servo.minPulseUs, servo.maxPulseUs));
 }
 
-void setServoAngle(uint8_t channel, int angle) {
-  pca.setPWM(channel, 0, angleToPulse(angle));
+void setEyes(long horizontal, long vertical) {
+  int newH = constrain(horizontal, SERVOS[LR].minAngle, SERVOS[LR].maxAngle);
+  int newV = constrain(vertical, SERVOS[UD].minAngle, SERVOS[UD].maxAngle);
+  if (newH != eyeH) setServoAngle(LR, newH);
+  if (newV != eyeV) setServoAngle(UD, newV);
+  eyeH = newH;
+  eyeV = newV;
 }
 
-void setEyelids(int topAngle, int botAngle) {
-  setServoAngle(PCA_CH_LID_TL, topAngle);
-  setServoAngle(PCA_CH_LID_TR, topAngle);
-  setServoAngle(PCA_CH_LID_BL, botAngle);
-  setServoAngle(PCA_CH_LID_BR, botAngle);
-}
-
-// ============================================================================
-// FUNCIONES AUXILIARES DE SENSORES
-// ============================================================================
-
-float readLM75A() {
-  Wire.beginTransmission(LM75_ADDR);
-  Wire.write(0x00);
-  if (Wire.endTransmission() != 0) {
-    return -999.0;
+void setLids(int opening) {
+  for (uint8_t channel = TL; channel < SERVO_COUNT; ++channel) {
+    const ServoCalibration &servo = SERVOS[channel];
+    setServoAngle(channel, map(opening, 0, 100, servo.holdAngle, servo.openAngle));
   }
+}
 
-  Wire.requestFrom(LM75_ADDR, 2);
-  if (Wire.available() >= 2) {
-    uint8_t msb = Wire.read();
-    uint8_t lsb = Wire.read();
-    int16_t raw = (msb << 8) | lsb;
-    return (raw >> 7) * 0.5;
+void startBlink(unsigned long now) {
+  blinking = true;
+  blinkStarted = now;
+  setLids(0);
+}
+
+void updateMode(unsigned long now) {
+  if (digitalRead(PIN_RUN) == HIGH) lastHoldTime = now;
+  bool run = now - lastHoldTime >= RUN_DEBOUNCE_MS;
+  if (run == moving) return;
+
+  moving = run;
+  blinking = false;
+  if (moving) {
+    setLids(lidOpening);
+    lastCommandTime = now;
+    nextBlink = now + 3000;
+    nextSaccade = now + IDLE_MS;
+    Serial.println(F("MOVE"));
+  } else {
+    setEyes(SERVOS[LR].holdAngle, SERVOS[UD].holdAngle);
+    setLids(0);
+    Serial.println(F("HOLD"));
   }
-  return -999.0;
 }
 
-void sendTelemetry() {
-  float temp = readLM75A();
-  float hum = dht.readHumidity();
+void processCommand(char *command, bool fromUsb) {
+  if (strncmp(command, "CMD:", 4) != 0) return;
 
-  if (isnan(hum)) hum = 0.0;
-  if (temp < -100.0) temp = 0.0;
+  long horizontal = eyeH;
+  long vertical = eyeV;
+  int opening = lidOpening;
+  bool hasEyeCommand = false;
+  bool blink = false;
+  for (char *pair = strtok(command + 4, ","); pair; pair = strtok(nullptr, ",")) {
+    char *equals = strchr(pair, '=');
+    if (!equals) continue;
+    *equals = '\0';
 
-  String packet = "SENS:T=" + String(temp, 1) + ",H=" + String(hum, 1);
-  espSerial.println(packet);
-}
+    char *end;
+    long value = strtol(equals + 1, &end, 10);
+    if (end == equals + 1 || *end != '\0') continue;
 
-// ============================================================================
-// PARSER DE COMANDOS DESDE EL ESP32 / PC (Tolerante a ruido)
-// ============================================================================
-
-/**
- * Procesa la trama recibida en formato: CMD:EH=90,EV=90,B=0,L=1
- * Parámetros soportados:
- *   E o EH : Ojos Horizontal (60 - 120)
- *   EV     : Ojos Vertical (70 - 110)
- *   B      : Forzar Parpadeo (1 = sí, 0 = no)
- *   L      : Luz / LED (1 = encendido, 0 = apagado)
- */
-void processCommand(String cmd) {
-  cmd.trim();
-  int cmdIdx = cmd.indexOf("CMD:");
-  if (cmdIdx == -1) return; // Si no contiene cabecera válida, ignorar
-
-  lastCommandTime = millis();
-  String params = cmd.substring(cmdIdx + 4);
-
-  int eyeHVal  = currentEyeHPos;
-  int eyeVVal  = currentEyeVPos;
-  int blinkVal = 0;
-  int lightVal = -1;
-
-  int startIdx = 0;
-  while (startIdx < params.length()) {
-    int commaIdx = params.indexOf(',', startIdx);
-    if (commaIdx == -1) commaIdx = params.length();
-
-    String pair = params.substring(startIdx, commaIdx);
-    int eqIdx = pair.indexOf('=');
-    if (eqIdx != -1) {
-      String key = pair.substring(0, eqIdx);
-      int val = pair.substring(eqIdx + 1).toInt();
-
-      key.toUpperCase();
-      if (key == "E" || key == "EH") eyeHVal = val;
-      else if (key == "EV") eyeVVal = val;
-      else if (key == "B") blinkVal = val;
-      else if (key == "L") lightVal = val;
+    if (strcmp(pair, "L") == 0 && (value == 0 || value == 1)) {
+      digitalWrite(PIN_LED, value == 1 ? HIGH : LOW);
+    } else if (strcmp(pair, "EH") == 0 || strcmp(pair, "E") == 0) {
+      horizontal = value;
+      hasEyeCommand = true;
+    } else if (strcmp(pair, "EV") == 0) {
+      vertical = value;
+      hasEyeCommand = true;
+    } else if (strcmp(pair, "B") == 0) {
+      blink = value == 1;
+    } else if (fromUsb && strcmp(pair, "O") == 0) {
+      opening = constrain(value, 0, 100);
     }
-    startIdx = commaIdx + 1;
   }
 
-  // 1. Aplicar posición de Ojos Horizontal (CH0) y Vertical (CH1) en PCA9685
-  int newH = constrain(eyeHVal, EYE_H_MIN, EYE_H_MAX);
-  int newV = constrain(eyeVVal, EYE_V_MIN, EYE_V_MAX);
-  if (newH != currentEyeHPos || newV != currentEyeVPos) {
-    currentEyeHPos = newH;
-    currentEyeVPos = newV;
-    setServoAngle(PCA_CH_EYE_H, currentEyeHPos);
-    setServoAngle(PCA_CH_EYE_V, currentEyeVPos);
+  if (opening != lidOpening) {
+    lidOpening = opening;
+    if (moving && !blinking) setLids(lidOpening);
   }
-
-  // 2. Forzar parpadeo coordinado ε3.2 en canales CH2-CH5
-  if (blinkVal == 1 && !isBlinking) {
-    isBlinking = true;
-    blinkStartTime = millis();
-    setEyelids(LID_TOP_CLOSED, LID_BOT_SQUINT);
+  if (!moving) return;
+  if (hasEyeCommand) {
+    lastCommandTime = millis();
+    setEyes(horizontal, vertical);
   }
-
-  // 3. Control de Luz / Relé
-  if (lightVal == 1) {
-    digitalWrite(PIN_LED, HIGH);
-  } else if (lightVal == 0) {
-    digitalWrite(PIN_LED, LOW);
-  }
+  if (blink && !blinking) startBlink(millis());
 }
 
-// ============================================================================
-// GESTOR DE VIDA AUTÓNOMA
-// ============================================================================
-
-void updateAutonomy() {
-  unsigned long now = millis();
-
-  // 1. Parpadeo autónomo
-  if (!isBlinking && now >= nextBlinkTime) {
-    isBlinking = true;
-    blinkStartTime = now;
-    setEyelids(LID_TOP_CLOSED, LID_BOT_SQUINT);
-  }
-
-  if (isBlinking && (now - blinkStartTime >= BLINK_DURATION_MS)) {
-    setEyelids(LID_TOP_OPEN, LID_BOT_REST);
-    isBlinking = false;
-    nextBlinkTime = now + random(3500, 6500);
-  }
-
-  // 2. Micro-sacadas oculares si no hay comandos activos
-  if (now - lastCommandTime > IDLE_SACCADE_TIMEOUT) {
-    if (now >= nextSaccadeTime) {
-      int subtleH = random(82, 99);
-      int subtleV = random(85, 96);
-      setServoAngle(PCA_CH_EYE_H, subtleH);
-      setServoAngle(PCA_CH_EYE_V, subtleV);
-      currentEyeHPos = subtleH;
-      currentEyeVPos = subtleV;
-      nextSaccadeTime = now + random(2500, 5500);
+void readCommands(Stream &port, CommandBuffer &buffer, bool fromUsb) {
+  while (port.available() > 0) {
+    char byte = port.read();
+    if (byte == '\r' || byte == '\n') {
+      if (buffer.length && !buffer.overflow) {
+        buffer.text[buffer.length] = '\0';
+        processCommand(buffer.text, fromUsb);
+      }
+      buffer.length = 0;
+      buffer.overflow = false;
+    } else if (buffer.length < sizeof(buffer.text) - 1 && byte != '\0') {
+      buffer.text[buffer.length++] = byte;
+    } else {
+      buffer.overflow = true;
     }
   }
 }
 
-// ============================================================================
-// SETUP Y LOOP PRINCIPAL
-// ============================================================================
+void updateAutonomy(unsigned long now) {
+  if (!blinking && static_cast<int32_t>(now - nextBlink) >= 0) startBlink(now);
+  if (blinking && now - blinkStarted >= BLINK_MS) {
+    setLids(lidOpening);
+    blinking = false;
+    nextBlink = now + random(3500, 6500);
+  }
+  if (now - lastCommandTime > IDLE_MS && static_cast<int32_t>(now - nextSaccade) >= 0) {
+    setEyes(random(82, 99), random(85, 96));
+    nextSaccade = now + random(2500, 5500);
+  }
+}
+
+void printTelemetry(Print &port, float temperature, float humidity) {
+  port.print(F("SENS:T="));
+  if (isnan(temperature)) port.print(F("NA"));
+  else port.print(temperature, 1);
+  port.print(F(",H="));
+  if (isnan(humidity)) port.println(F("NA"));
+  else port.println(humidity, 1);
+}
 
 void setup() {
   Serial.begin(115200);
-  // SoftwareSerial a 38400 baudios (4x más rápido que 9600 bps original)
-  espSerial.begin(SW_SERIAL_BAUD);
-
+  espSerial.begin(UART_BAUD);
+  pinMode(PIN_LED, OUTPUT);
+  pinMode(PIN_RUN, INPUT_PULLUP);
   Wire.begin();
   dht.begin();
 
-  pinMode(PIN_LED, OUTPUT);
-  digitalWrite(PIN_LED, LOW);
-
-  // Inicializar controlador PCA9685 a 50Hz para servomotores estándar
-  pca.begin();
-  pca.setPWMFreq(50);
-
-  // Posicionar los 6 servos del ε3.2 en posición neutra de arranque
-  setServoAngle(PCA_CH_EYE_H, EYE_H_NEUTRAL);
-  setServoAngle(PCA_CH_EYE_V, EYE_V_NEUTRAL);
-  setEyelids(LID_TOP_OPEN, LID_BOT_REST);
+  pcaReady = pca.begin();
+  if (pcaReady) {
+    pca.setPWMFreq(50);
+    setServoAngle(LR, eyeH);
+    setServoAngle(UD, eyeV);
+    setLids(0);
+    Serial.println(F("PCA9685 0x40 OK. HOLD"));
+  } else {
+    Serial.println(F("ERROR: PCA9685 0x40 no responde. Revisar I2C y reiniciar."));
+  }
 
   randomSeed(analogRead(A0));
-  nextBlinkTime = millis() + 3000;
-  nextSaccadeTime = millis() + 5000;
-  lastTelemetryTime = millis();
-
-  Serial.println(F("=================================================="));
-  Serial.println(F(" Arduino Uno R3: Mecanismo Ocular ε3.2 + PCA9685 "));
-  Serial.println(F(" PCA9685 I2C (0x40): CH0-CH5 para 6 Servos Ojos  "));
-  Serial.println(F(" SoftwareSerial ESP32: D2 (RX), D3 (TX) @ 38400bps"));
-  Serial.println(F("=================================================="));
+  lastHoldTime = lastTelemetryTime = millis();
 }
 
 void loop() {
-  while (espSerial.available() > 0) {
-    char c = espSerial.read();
-    if (c == '\n' || c == '\r') {
-      if (inputBuffer.length() > 0) {
-        processCommand(inputBuffer);
-        inputBuffer = "";
-      }
-    } else {
-      if (inputBuffer.length() < 64) {
-        inputBuffer += c;
-      }
-    }
-  }
-
-  updateAutonomy();
-
   unsigned long now = millis();
-  if (now - lastTelemetryTime >= TELEMETRY_INTERVAL_MS) {
+  if (pcaReady) updateMode(now);
+  readCommands(espSerial, espInput, false);
+  readCommands(Serial, usbInput, true);
+  // Los comandos pueden actualizar sus marcas con millis() después de leer now.
+  now = millis();
+  if (moving) updateAutonomy(now);
+
+  if (now - lastTelemetryTime >= TELEMETRY_MS) {
     lastTelemetryTime = now;
-    sendTelemetry();
+    float humidity = dht.readHumidity();
+    float temperature = dht.readTemperature();
+    printTelemetry(espSerial, temperature, humidity);
+    printTelemetry(Serial, temperature, humidity);
   }
 }

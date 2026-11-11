@@ -71,9 +71,11 @@ def check_ollama() -> Dict[str, Any]:
         "available_models": models
     }
 
-def build_system_prompt(temperature: float = 23.5, humidity: float = 55.0, light_state: int = 0) -> str:
+def build_system_prompt(temperature: Optional[float] = None, humidity: Optional[float] = None, light_state: int = 0) -> str:
     """Construye el prompt de sistema encarnando a V de Venganza fusionado con un Loquendo clásico con vida y humor roto."""
     light_str = "ENCENDIDA" if light_state == 1 else "APAGADA"
+    temp_str = f"{temperature:.1f} °C" if temperature is not None else "sin lectura"
+    hum_str = f"{humidity:.0f} %" if humidity is not None else "sin lectura"
     dt_info = get_current_datetime_info()
     agenda_str = get_agenda_summary_for_today()
 
@@ -99,7 +101,7 @@ def build_system_prompt(temperature: float = 23.5, humidity: float = 55.0, light
         f"- Fecha y hora actual del sistema: {dt_info['texto_fecha']}\n"
         f"- Conmemoración histórica: {dt_info['nov5_note']}\n"
         f"- Agenda y compromisos de hoy: {agenda_str}\n"
-        f"- Sensores del laboratorio: Temperatura {temperature:.1f} °C, Humedad {humidity:.0f} %, Luz de laboratorio {light_str}.\n\n"
+        f"- Sensores del laboratorio: Temperatura {temp_str}, Humedad {hum_str}, Luz de laboratorio {light_str}.\n\n"
         "COMANDOS FÍSICOS:\n"
         "- Si el usuario te pide encender la luz: incluye [LUZ_ON] ('¡Que la luz rasgue las tinieblas, ejecuten como administrador XD!').\n"
         "- Si te pide apagar la luz: incluye [LUZ_OFF] ('Las sombras vuelven a protegernos, pero no le di importancia JAJAJAJA').\n"
@@ -107,7 +109,7 @@ def build_system_prompt(temperature: float = 23.5, humidity: float = 55.0, light
         "- Si te pide agendar algo: incluye [AGREGAR_AGENDA: Tarea|Fecha|Hora] ('Queda anotado en el archivo comprimido sin contraseña').\n"
     )
 
-def query_fallback(prompt: str, temperature: float, humidity: float, light_state: int) -> str:
+def query_fallback(prompt: str, temperature: Optional[float], humidity: Optional[float], light_state: int) -> str:
     """Motor heurístico de contingencia con la personalidad de V y humor loquendero clásico cuando Ollama no responde."""
     p = prompt.lower().strip()
     dt_info = get_current_datetime_info()
@@ -120,12 +122,16 @@ def query_fallback(prompt: str, temperature: float, humidity: float, light_state
         return f"El link de vuestra agenda está en la descripción del video por Mediafire: {agenda_str} Yo no lo descargo porque ya lo tengo, JAJAJAJA."
     elif any(w in p for w in ["anota", "agenda", "recuerda", "apunta", "guarda"]):
         return f"[AGREGAR_AGENDA: {prompt}] Le dan extraer aquí a este compromiso y queda guardado en el archivo WinRAR del destino, XD XD XD."
-    elif any(w in p for w in ["temperatura", "grados", "calor", "frio", "clima"]):
+    elif any(w in p for w in ["temperatura", "grados", "calor", "frio", "clima", "humedad", "ambiente"]):
+        if temperature is None or humidity is None:
+            temp_str = f"{temperature:.1f} grados Celsius" if temperature is not None else "sin lectura"
+            hum_str = f"{humidity:.0f} por ciento" if humidity is not None else "sin lectura"
+            return f"Temperatura del laboratorio: {temp_str}. Humedad relativa: {hum_str}."
+        if any(w in p for w in ["humedad", "ambiente"]):
+            return (f"El sensor DHT reporta un {humidity:.0f} por ciento de humedad relativa y {temperature:.1f} grados. "
+                    f"Ejecuten la ventilación como administrador para que no les tire error, XD.")
         return (f"Nuestros instrumentos marcan {temperature:.1f} grados Celsius y {humidity:.0f} por ciento de humedad. "
                 f"Vi una anomalía térmica en el laboratorio... pero no le di importancia JAJAJAJA.")
-    elif any(w in p for w in ["humedad", "ambiente"]):
-        return (f"El sensor DHT11 reporta un {humidity:.0f} por ciento de humedad relativa y {temperature:.1f} grados. "
-                f"Ejecuten la ventilación como administrador para que no les tire error, XD.")
     elif "enciende" in p and "luz" in p:
         return "[LUZ_ON] ¡Voilà! Hágase la luz sobre este tutorial de la revolución. Link en la descripción, denle like y suscríbanse JAJAJAJA."
     elif "apaga" in p and "luz" in p:
@@ -143,8 +149,10 @@ def query_fallback(prompt: str, temperature: float, humidity: float, light_state
     elif any(w in p for w in ["descarga", "link", "tutorial", "archivo"]):
         return ("El link está en la descripción sin contraseña. Yo no lo descargo porque ya lo tengo, le dan extraer aquí y listo XD XD JAJAJAJA.")
     elif any(w in p for w in ["hola", "buenos dias", "buenas tardes", "saludos", "hey"]):
-        return (f"Hola amigos de YouTube, hoy les traigo un cordial saludo para vuestra merced. "
-                f"El termómetro marca {temperature:.1f} grados y mi alma loquendera está viva, JAJAJAJA XD.")
+        saludo = "Hola amigos de YouTube, hoy les traigo un cordial saludo para vuestra merced. "
+        if temperature is not None:
+            saludo += f"El termómetro marca {temperature:.1f} grados y mi alma loquendera está viva, "
+        return saludo + "JAJAJAJA XD."
     else:
         return (f"He procesado vuestro mensaje: '{prompt}'. "
                 f"Le dan extraer aquí a vuestra consulta y no le den importancia a los errores del sistema, JAJAJAJA XD XD XD.")
@@ -152,8 +160,8 @@ def query_fallback(prompt: str, temperature: float, humidity: float, light_state
 def query_qwen(
     prompt: str,
     history: Optional[List[Dict[str, str]]] = None,
-    temperature: float = 23.5,
-    humidity: float = 55.0,
+    temperature: Optional[float] = None,
+    humidity: Optional[float] = None,
     light_state: int = 0,
     model: Optional[str] = None
 ) -> str:

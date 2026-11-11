@@ -6,7 +6,7 @@
  * ============================================================================
  * 
  * DISTRIBUCIÓN DE PINES OFICIAL:
- *   - GPIO 17 (TX2) : Salida UART2 (3.3V) -> Directo a Arduino Pin D2 (RX)
+ *   - GPIO 17 (TX2) : Salida UART2 (3.3V) -> Arduino Pin D2 (RX)
  *   - GPIO 16 (RX2) : Entrada UART2 (3.3V) <- Desde divisor 1k/2k (Arduino D3 TX)
  *   - GPIO 2        : LED azul integrado (Indicador de conexión Wi-Fi/WebSocket)
  *   - GND           : Tierra Común (Unida a Arduino y Fuente Externa de Servos)
@@ -19,12 +19,12 @@
 // ----------------------------------------------------------------------------
 // CONFIGURACIÓN DE RED WI-FI Y SERVIDOR PC LOCAL
 // ----------------------------------------------------------------------------
-// Ingrese el nombre y contraseña de su red Wi-Fi doméstica o punto de acceso:
-const char* WIFI_SSID     = "TU_RED_WIFI";
-const char* WIFI_PASSWORD = "TU_PASSWORD";
-
-// Dirección IP local de la computadora (donde corre el servidor en Python):
-const char* PC_SERVER_IP  = "192.168.1.15";
+// Copiar wifi_config.example.h a wifi_config.h y ajustar los datos locales.
+#if __has_include("wifi_config.h")
+#include "wifi_config.h"
+#else
+#include "wifi_config.example.h"
+#endif
 const uint16_t PC_PORT    = 8000;
 const char* WS_PATH       = "/ws/animatronic";
 
@@ -59,6 +59,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch (type) {
     case WStype_DISCONNECTED:
       isWebSocketConnected = false;
+      hasPendingCommand = false;
       digitalWrite(PIN_STATUS_LED, LOW);
       Serial.println(F("[WS] Desconectado del servidor PC local. Reintentando..."));
       break;
@@ -74,16 +75,24 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
 
     case WStype_TEXT:
       {
-        String command = String((char*)payload);
+        // Limitar la trama al tamaño que admite el parser del Uno.
+        if (length == 0 || length >= 64 || memchr(payload, '\0', length)) break;
+        char line[64];
+        memcpy(line, payload, length);
+        line[length] = '\0';
+        String command(line);
         command.trim();
+        if (!command.startsWith("CMD:") || command.indexOf('\n') >= 0 ||
+            command.indexOf('\r') >= 0) break;
 
-        // Política Latest-Command-Wins para comandos cinemáticos continuos
-        if (command.startsWith("CMD:")) {
+        // Las órdenes de luz y parpadeo del servidor llevan posición ocular.
+        if (command.indexOf(",L=") >= 0 || command.startsWith("CMD:L=") ||
+            command.indexOf(",B=1") >= 0 || command.startsWith("CMD:B=1")) {
+          hasPendingCommand = false;
+          ArduinoSerial.println(command);
+        } else {
           pendingCommand = command;
           hasPendingCommand = true;
-        } else {
-          // Comandos discretos o no continuos: enviar directamente
-          ArduinoSerial.println(command);
         }
       }
       break;
@@ -155,14 +164,19 @@ void setup() {
   // Conectar a la red inalámbrica
   connectWiFi();
 
-  // Configuración del cliente WebSocket hacia la PC
+  // Determinar dinámicamente la IP de la laptop:
+  // Si estamos conectados a la Zona con cobertura móvil (Hotspot) de la PC,
+  // la PC es la puerta de enlace (Gateway IP: 192.168.137.1).
+  IPAddress targetIP = WiFi.gatewayIP();
+  String serverHost = (targetIP[0] != 0 && targetIP[0] != 255) ? targetIP.toString() : String(PC_SERVER_IP);
+
   Serial.print(F("[WS] Configurando cliente hacia: ws://"));
-  Serial.print(PC_SERVER_IP);
+  Serial.print(serverHost);
   Serial.print(F(":"));
   Serial.print(PC_PORT);
   Serial.println(WS_PATH);
 
-  webSocket.begin(PC_SERVER_IP, PC_PORT, WS_PATH);
+  webSocket.begin(serverHost.c_str(), PC_PORT, WS_PATH);
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(2000); // Reintentar reconexión cada 2 segundos
   webSocket.enableHeartbeat(5000, 3000, 2); // Mantener enlace activo

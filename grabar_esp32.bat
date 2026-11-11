@@ -5,14 +5,19 @@ REM ============================================================================
 chcp 65001 >nul
 title Grabador ESP32 DevKit V1
 
+set "PY_CMD=python"
+if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PY_CMD=%~dp0.venv\Scripts\python.exe"
+)
+
 set PORT=%~1
 if "%PORT%"=="" (
     echo ==================================================
     echo  GRABACIÓN DE ESP32 DEVKIT V1
     echo ==================================================
-    arduino-cli board list 2>nul
+    "%PY_CMD%" "%~dp0tools\grabar_firmware.py" --list 2>nul
     echo.
-    set /p PORT="Introduce el puerto COM (ejemplo: COM4): "
+    set /p PORT="Introduce el puerto COM (ejemplo: COM8): "
 )
 
 if "%PORT%"=="" (
@@ -21,11 +26,12 @@ if "%PORT%"=="" (
     exit /b 1
 )
 
-python tools\grabar_firmware.py --asistente --esp32 %PORT%
+"%PY_CMD%" "%~dp0tools\grabar_firmware.py" --esp32 "%PORT%"
 if errorlevel 1 (
     echo [ERROR] Hubo un problema al grabar.
-) else (
-    echo [OK] Grabación finalizada.
+    pause
+    exit /b 1
 )
+echo [OK] Grabación finalizada.
 pause
-
+exit /b 0

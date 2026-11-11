@@ -49,7 +49,7 @@ sequenceDiagram
     Note over Phone: Detección de fin de frase por silencio (1.4s)
     Phone->>PC: POST /api/chat {"text": "...", "voice": "jorge"}
     
-    Note over PC: Ollama Qwen 2.5 procesa consulta + telemetría LM75A/DHT11
+    Note over PC: Ollama Qwen 2.5 procesa consulta + telemetría del DHT11
     Note over PC: Genera respuesta con tags [BLINK] y sintetiza audio
     PC-->>Phone: {"speech_text": "...", "audio_url": "/audio/loquendo_xxx.mp3"}
 
@@ -69,8 +69,7 @@ sequenceDiagram
 * **Cero Contacto Físico:** Tras desbloquear la sesión de audio inicial con un toque, el ciclo opera 100% por voz.
 * **Túnel Seguro Cloudflare HTTPS Integrado:** Genera automáticamente un enlace seguro temporal (`https://*.trycloudflare.com`) para que Safari en iPhone y Chrome en Android permitan el uso prolongado del micrófono sin bloqueos.
 * **Telemetría en Vivo:**
-  * Temperatura ambiente en tiempo real (sensor digital **LM75A** por bus I2C `0x48`).
-  * Humedad relativa (sensor **DHT11** por pin `D4`).
+  * Temperatura ambiente y humedad relativa del **DHT11** conectado a `D4` del Uno.
   * Control del LED de laboratorio (**Pin D7**).
   * Monitoreo de latencia de Ollama (`qwen2.5`) y enlace ESP32 DevKit V1.
 

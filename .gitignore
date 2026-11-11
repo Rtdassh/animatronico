@@ -53,3 +53,6 @@ server_pc/models/
 server_pc/certs/
 server_pc/data/unified-runtime.json
 **/build/
+
+# Credenciales Wi-Fi locales de los sketches ESP32
+/firmware/*/wifi_config.h

@@ -1,10 +1,14 @@
 @echo off
 REM =============================================================================
-REM Asistente interactivo de grabación de firmware (Windows)
+REM Grabador integral (Arduino Uno + ESP32)
 REM =============================================================================
 chcp 65001 >nul
-title Grabador Firmware - Cabeza Animatronica
+title Grabador Cabeza Animatronica
 
-python tools\grabar_firmware.py --asistente %*
+set "PY_CMD=python"
+if exist "%~dp0.venv\Scripts\python.exe" (
+    set "PY_CMD=%~dp0.venv\Scripts\python.exe"
+)
+
+"%PY_CMD%" "%~dp0tools\grabar_firmware.py" %*
 pause
-

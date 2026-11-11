@@ -367,8 +367,8 @@ function initWebSocket() {
 }
 
 function updateTelemetry(temp, hum) {
-  if (temp !== undefined && tempValue) tempValue.textContent = `${Number(temp).toFixed(1)} °C`;
-  if (hum !== undefined && humValue) humValue.textContent = `${Number(hum).toFixed(0)} %`;
+  if (temp !== undefined && tempValue) tempValue.textContent = temp === null ? "--.- °C" : `${Number(temp).toFixed(1)} °C`;
+  if (hum !== undefined && humValue) humValue.textContent = hum === null ? "-- %" : `${Number(hum).toFixed(0)} %`;
 }
 
 function updateLightState(state) {

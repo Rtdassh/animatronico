@@ -18,7 +18,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FIRMWARE_DIR = BASE_DIR / "firmware"
-BIN_DIR = FIRMWARE_DIR / "binarios"
+BIN_DIR = BASE_DIR / "build" / "firmware"
 
 # Directorios de sketches (Por defecto en esta rama: Asistente Completo)
 ARDUINO_ASISTENTE_DIR = FIRMWARE_DIR / "asistente_arduino"
@@ -46,6 +46,8 @@ def find_arduino_cli() -> str:
         return cli
     
     candidates = [
+        BASE_DIR / "build" / "eyemech-tools" / "arduino-cli.exe",
+        BASE_DIR / "build" / "eyemech-tools" / "arduino-cli",
         Path.home() / ".local" / "bin" / "arduino-cli",
         Path.home() / ".local" / "bin" / "arduino-cli.exe",
         Path("/usr/local/bin/arduino-cli"),
@@ -53,12 +55,15 @@ def find_arduino_cli() -> str:
         Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "arduino-cli" / "arduino-cli.exe",
     ]
     for c in candidates:
-        if c.exists() and os.access(c, os.X_OK):
+        if c.exists() and (sys.platform.startswith("win") or os.access(c, os.X_OK)):
             return str(c)
     
     return "arduino-cli"
 
 ARDUINO_CLI = find_arduino_cli()
+
+CONFIG_YAML = BASE_DIR / "build" / "eyemech-tools" / "arduino-cli.yaml"
+CLI_BASE_ARGS = ["--config-file", str(CONFIG_YAML)] if CONFIG_YAML.exists() else []
 
 def get_connected_ports():
     """Detecta puertos serie conectados mediante arduino-cli y enumeración del sistema."""
@@ -67,7 +72,7 @@ def get_connected_ports():
     # 1. Consulta a arduino-cli en formato JSON
     try:
         proc = subprocess.run(
-            [ARDUINO_CLI, "board", "list", "--format", "json"],
+            [ARDUINO_CLI] + CLI_BASE_ARGS + ["board", "list", "--format", "json"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -109,8 +114,8 @@ def compilar_firmware(target: str) -> bool:
     if target in ("arduino", "all"):
         sketch_name = ARDUINO_SKETCH_DIR.name
         print(f"[COMPILANDO] Arduino Uno R3 ({sketch_name})...")
-        cmd = [
-            ARDUINO_CLI, "compile",
+        cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+            "compile",
             "--fqbn", FQBN_ARDUINO,
             "--output-dir", str(ARDUINO_BIN_DIR),
             str(ARDUINO_SKETCH_DIR)
@@ -124,8 +129,8 @@ def compilar_firmware(target: str) -> bool:
     if target in ("esp32", "all"):
         sketch_name = ESP32_SKETCH_DIR.name
         print(f"[COMPILANDO] ESP32 DevKit V1 ({sketch_name})...")
-        cmd = [
-            ARDUINO_CLI, "compile",
+        cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+            "compile",
             "--fqbn", FQBN_ESP32,
             "--output-dir", str(ESP32_BIN_DIR),
             str(ESP32_SKETCH_DIR)
@@ -147,18 +152,14 @@ def grabar_arduino(port: str) -> bool:
     print(f"FQBN:            {FQBN_ARDUINO}")
     print(f"==================================================")
 
-    hex_file = ARDUINO_BIN_DIR / f"{sketch_name}.ino.hex"
-    if not hex_file.exists():
-        print(f"[INFO] Binario {hex_file.name} no encontrado. Compilando...")
-        if not compilar_firmware("arduino"):
-            return False
+    if not compilar_firmware("arduino"):
+        return False
 
-    cmd = [
-        ARDUINO_CLI, "upload",
+    cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+        "upload",
         "-p", port,
         "--fqbn", FQBN_ARDUINO,
-        "--input-dir", str(ARDUINO_BIN_DIR),
-        str(ARDUINO_SKETCH_DIR)
+        "--input-dir", str(ARDUINO_BIN_DIR)
     ]
     res = subprocess.run(cmd)
     if res.returncode == 0:
@@ -166,8 +167,8 @@ def grabar_arduino(port: str) -> bool:
         return True
     else:
         print(f"\n[INFO] Reintentando compilación y subida directa...")
-        cmd_direct = [
-            ARDUINO_CLI, "compile",
+        cmd_direct = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+            "compile",
             "--upload",
             "-p", port,
             "--fqbn", FQBN_ARDUINO,
@@ -194,20 +195,16 @@ def grabar_esp32(port: str) -> bool:
     print(f"FQBN:            {FQBN_ESP32}")
     print(f"==================================================")
 
-    bin_file = ESP32_BIN_DIR / f"{sketch_name}.ino.bin"
-    if not bin_file.exists():
-        print(f"[INFO] Binario {bin_file.name} no encontrado. Compilando...")
-        if not compilar_firmware("esp32"):
-            return False
+    if not compilar_firmware("esp32"):
+        return False
 
     print("[AVISO] Si la consola se detiene en 'Connecting....._____.....', mantén presionado el botón 'BOOT' en la placa ESP32.")
 
-    cmd = [
-        ARDUINO_CLI, "upload",
+    cmd = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+        "upload",
         "-p", port,
         "--fqbn", FQBN_ESP32,
-        "--input-dir", str(ESP32_BIN_DIR),
-        str(ESP32_SKETCH_DIR)
+        "--input-dir", str(ESP32_BIN_DIR)
     ]
     res = subprocess.run(cmd)
     if res.returncode == 0:
@@ -215,13 +212,24 @@ def grabar_esp32(port: str) -> bool:
         return True
     else:
         print(f"\n[INFO] Reintentando compilación y subida directa...")
-        cmd_direct = [
-            ARDUINO_CLI, "compile",
+        cmd_direct = [ARDUINO_CLI] + CLI_BASE_ARGS + [
+            "compile",
             "--upload",
             "-p", port,
             "--fqbn", FQBN_ESP32,
             str(ESP32_SKETCH_DIR)
         ]
+        res_direct = subprocess.run(cmd_direct)
+        if res_direct.returncode == 0:
+            print(f"\n[EXITO] Firmware '{sketch_name}' grabado correctamente en ESP32.")
+            return True
+
+        print(f"\n[ERROR] Falló la grabación de ESP32.")
+        print("Sugerencias:")
+        print("1. Mantén presionado el botón 'BOOT' en el ESP32 mientras aparece 'Connecting...'.")
+        print("2. Revisa que el cable microUSB soporte datos y no solo carga.")
+        print("3. Cierra el monitor serie o cualquier otro software que ocupe el puerto.")
+        return False
         res_direct = subprocess.run(cmd_direct)
         if res_direct.returncode == 0:
             print(f"\n[EXITO] Firmware '{sketch_name}' grabado correctamente en ESP32.")
@@ -321,7 +329,7 @@ def main():
     parser.add_argument("--arduino", "-a", metavar="PORT", help="Grabar Arduino Uno en el puerto indicado (ej. /dev/ttyACM0 o COM3)")
     parser.add_argument("--esp32", "-e", metavar="PORT", help="Grabar ESP32 en el puerto indicado (ej. /dev/ttyUSB0 o COM4)")
     parser.add_argument("--animatronico", action="store_true", help="Usar firmware original de la cabeza animatrónica en lugar del asistente")
-    parser.add_argument("--asistente", action="store_true", default=True, help="Usar firmware del Asistente de Escritorio (por defecto)")
+    parser.add_argument("--asistente", action="store_true", help="Usar firmware del Asistente de Escritorio")
     parser.add_argument("--compile-only", "-c", choices=["arduino", "esp32", "all"], help="Compilar binarios sin grabar")
     parser.add_argument("--list", "-l", action="store_true", help="Listar puertos serie detectados")
     args = parser.parse_args()
@@ -329,7 +337,7 @@ def main():
     if args.animatronico:
         ARDUINO_SKETCH_DIR = ARDUINO_ANIMATRONICO_DIR
         ESP32_SKETCH_DIR = ESP32_ANIMATRONICO_DIR
-    else:
+    elif args.asistente:
         ARDUINO_SKETCH_DIR = ARDUINO_ASISTENTE_DIR
         ESP32_SKETCH_DIR = ESP32_ASISTENTE_DIR
 
@@ -340,22 +348,22 @@ def main():
                 print(p["label"])
         else:
             print("No se encontraron placas serie conectadas.")
-        return
+        return 0
 
     if args.compile_only:
-        compilar_firmware(args.compile_only)
-        return
+        return 0 if compilar_firmware(args.compile_only) else 1
 
     if args.arduino:
-        grabar_arduino(args.arduino)
-        return
+        return 0 if grabar_arduino(args.arduino) else 1
 
     if args.esp32:
-        grabar_esp32(args.esp32)
-        return
+        return 0 if grabar_esp32(args.esp32) else 1
 
     # Si no se pasaron argumentos, ejecutar menú interactivo
-    menu_interactivo()
+    return menu_interactivo()
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except FileNotFoundError as error:
+        sys.exit(f"[ERROR] No se pudo ejecutar Arduino CLI: {error}")

@@ -4,6 +4,10 @@ Sistema robótico y de sensado ambiental desacoplado en 4 niveles de cómputo y 
 
 La aplicación integrada se inicia con **`iniciar_web_unificada.bat`**: usa el Wi-Fi del ESP32 y reúne asistente, visión, micrófono del celular por HTTPS, sensores y los 16 canales de servo. Consulta [la guía de la web unificada](docs/GUIA_WEB_UNIFICADA.md) para instalar el certificado del celular y usar el modo sin tocar sin depender de internet.
 
+## Armado del EyeMech ε3.2
+
+Consulta la [guía de armado y puesta en marcha](docs/GUIA_ARMADO_EYEMECH.md) para cablear el Uno, ESP32, PCA9685 y DHT11, calibrar los seis servos en Hold y probar el conjunto. Los planos anteriores con LM75A o módulo de audio quedan como referencia histórica.
+
 ---
 
 ## 🏛️ Modos de Funcionamiento
@@ -36,43 +40,36 @@ No requiere computadora ejecutándose. El ESP32 crea su propio Punto de Acceso W
                                              └───────────────────────────────┘
 ```
 
-### Modo 2: Modo Inteligente con PC Local (Loquendo, Qwen 2.5 y Visión Facial)
-La computadora se conecta al Wi-Fi del ESP32 y mantiene un único enlace USB con esa placa. Sirve la web integrada por HTTPS, con Ollama local, reconocimiento español Vosk, voces locales y visión mediante OpenCV. El celular usa esa misma red para todos los controles y el modo manos libres; el navegador se conecta al servidor por HTTPS y WebSocket seguro.
+### Modo 2: Sistema Animatrónico Inteligente con PC Local (EyeMech ε3.2)
+La laptop comparte su conexión de internet vía Hotspot hacia el ESP32, o conecta mediante WebSocket de alta velocidad. Sirve la interfaz web integrada con pestañas de Asistente, Visión Facial OpenCV, IA Local Qwen 2.5 y panel de hardware y calibración de servos:
 
----
+```text
+ ┌──────────────────────┐    Wi-Fi / HTTPS   ┌───────────────────────────────┐
+ │ 1. SMARTPHONE        │ <----------------> │ 2. PC LOCAL                   │
+ │ • Modo Manos Libres  │                    │ • Ollama (Qwen 2.5:7b Local)  │
+ │ • Micrófono Continuo │                    │ • Loquendo TTS / Voicebox     │
+ │ • WakeNet / Hotword  │                    │ • Visión Facial OpenCV 30 FPS │
+ │ • Altavoz de Salida  │                    │ • Túnel Cloudflare HTTPS      │
+ │ • Virtual Lip-Sync   │                    │ • FastAPI / WebSockets        │
+ └──────────────────────┘                    └───────────────────────────────┘
+                                                             │
+                                                    WebSocket / Wi-Fi
+                                                     /ws/animatronic
+                                                             v
+ ┌──────────────────────┐    Hardware UART   ┌───────────────────────────────┐
+ │ 4. ARDUINO UNO R3    │ <----------------- │ 3. ESP32 DEVKIT V1            │
+ │ • PCA9685 (6x Servos)│(38400 bps / 3.3V)  │ • Pasarela Wi-Fi WebSocket    │
+ │ • Mecanismo Ocular   │ Latest-Cmd-Wins    │ • Hardware UART2 (GPIO 16/17) │
+ │ • Hold/Move en D8    │                    │ • Buffer de movimiento        │
+ │ • Sensor DHT11       │                    └───────────────────────────────┘
+ │ • Luz Pin D7         │
+ └──────────────────────┘
+```
 
-## 🔌 Diagrama Eléctrico y Distribución de Pines
-
-> [!CAUTION]
-> **Seguridad Eléctrica y Reglas Críticas:**
-> 1. **Alimentación USB Independiente:** Arduino Uno y ESP32 deben alimentarse cada uno por su conector USB estándar. **Nunca introduzcas 3.3 V al pin VIN del ESP32** (su regulador interno requiere mínimo 4.5 V).
-> 2. **Alimentación de Servos:** Los servomotores SG90 deben alimentarse exclusivamente desde el **borne verde (`V+` y `GND`) del PCA9685** mediante un convertidor LM2596 calibrado con multímetro a **5.00 V** (desde fuente externa 12 V / 1 A).
-> 3. **Tierras comunes:** Une `GND` de Arduino, `GND` de ESP32 y `GND` del LM2596 / PCA9685.
-> 4. **Pin AREF:** Debe permanecer desconectado.
-
-### Tabla Maestra de Interconexión
-
-| Señal | Arduino Uno R3 | Destino / Componente | Notas |
-|---|---|---|---|
-| **SDA** | Pin A4 | LM75A, LCD 1602 y PCA9685 | Bus I2C Compartido (100 kHz) |
-| **SCL** | Pin A5 | LM75A, LCD 1602 y PCA9685 | Bus I2C Compartido (100 kHz) |
-| **5V Lógica** | Pin 5V | VCC de LM75A, LCD, DHT11 y PCA9685 | Riel de 5V para sensores |
-| **GND** | Pin GND | Tierra común de todo el circuito | Referencia eléctrica unificada |
-| **DHT11 DATA** | Pin D4 | DATA sensor DHT11 | Driver ciclo a ciclo sin bloqueos |
-| **Buzzer** | Pin D8 | Señal S del buzzer pasivo KY-006 | Pata central libre |
-| **UART RX** | Pin D2 | GPIO 17 (TX2) del ESP32 | Conexión directa a 3.3V |
-| **UART TX** | Pin D3 | Entrada Divisor 1kΩ / 2kΩ | Salida 3.33V hacia GPIO 16 (RX2) del ESP32 |
-| **Borne V+** | — | Salida OUT+ LM2596 (5.0V) | Borne verde del PCA9685 para servos |
-
----
-
-## 📁 Estructura del Firmware en esta Rama
-
-- **`firmware/asistente_arduino/`**: Sketch completo del Arduino Uno (`asistente_arduino.ino`) con lectura de DHT11 por conteo de ciclos con `noInterrupts()`, escáner I2C autónomo, inicialización por nibbles de la LCD 1602 (PCF8574), control de 2 servos con PCA9685, buzzer en D8 y protocolo serie bidireccional.
-- **`firmware/asistente_esp32/`**: Sketch del ESP32 DevKit V1 (`asistente_esp32.ino`) con servidor web HTTP autónomo en memoria (`panel.h`), punto de acceso `Asistente-ESP32` y pasarela UART2.
-- **`docs/LEEME-ANTES-DE-CARGAR.md`**: Instrucciones directas de cableado, orden de armado y resolución de problemas.
-- **`docs/GUIA_ASISTENTE_ESCRITORIO.md`**: Documentación técnica exhaustiva, análisis post-mortem de fallas de laboratorio y arquitectura.
-- **`docs/plano_circuito_asistente.svg`**: Esquema gráfico vectorial de alta definición de las conexiones.
+1. **Smartphone (Nodo de Audio Manos Libres Tipo Alexa):** El celular funciona como micrófono continuo y altavoz inalámbrico. El usuario puede operar sin tocar la pantalla: detecta la palabra clave ("Oye Robot" o "Alexa"), responde de inmediato con "¿En qué te ayudo?", captura la pregunta por voz y reproduce la respuesta de la IA por su altavoz.
+2. **PC Local (Cerebro Central):** Servidor asíncrono en Python con FastAPI. Conecta con el modelo local **Qwen 2.5 (7B)** vía Ollama en hilos no bloqueantes, sintetiza voz neuronal con el esqueleto de **Voicebox** o las voces de **Loquendo** (Jorge, Carlos, Carmen) con caché en disco, gestiona el pipeline de visión artificial a 30+ FPS y administra la telemetría ambiental.
+3. **ESP32 DevKit V1 (Pasarela Inalámbrica):** Cliente WebSocket de alta velocidad conectado a la PC. Reenvía instrucciones de movimiento por `UART2` al Arduino Uno a 38400 baudios. Conserva el último comando de seguimiento y reenvía por separado las órdenes de luz y parpadeo.
+4. **Arduino Uno R3 (Controlador de movimiento):** Maneja por I²C el **PCA9685** para los seis servos del EyeMech ε3.2. En Hold centra los ojos y cierra los párpados para calibrar. En Move recibe consignas de mirada y genera parpadeos y movimientos autónomos. El **DHT11** entrega temperatura y humedad.
 
 ---
 

@@ -10,6 +10,7 @@ Plataforma: PC Local (FastAPI + Ollama / Qwen 2.5 + Loquendo TTS + WebSockets)
 import os
 import re
 import json
+import math
 import uuid
 import time
 import base64
@@ -137,8 +138,8 @@ app.add_middleware(
 # ESTADO GLOBAL DEL SISTEMA EN MEMORIA
 # -----------------------------------------------------------------------------
 class SystemState:
-    temperature: float = 23.5  # Lectura LM75A / DHT11 (°C)
-    humidity: float = 55.0     # Lectura DHT11 (% RH)
+    temperature: Optional[float] = None  # DHT11 (°C)
+    humidity: Optional[float] = None     # DHT11 (% HR)
     light_state: int = 0       # 0: Apagada, 1: Encendida (Pin D7)
     mouth_angle: int = 90      # 90° cerrada a 130° abierta
     eyes_angle: int = 90       # Pan / Horizontal (60° a 120°)
@@ -693,9 +694,12 @@ async def remove_agenda_item(item_id: str):
 async def websocket_esp32_endpoint(websocket: WebSocket):
     """
     Canal de comunicación ultrarrápido con el ESP32 DevKit V1.
-    Recibe lecturas 'SENS:T=...,H=...' y envía 'CMD:M=...,E=...,B=...,L=...'.
+    Recibe 'SENS:T=...,H=...' y envía 'CMD:EH=...,EV=...,B=...,L=...'.
     """
+    global last_sent_eh, last_sent_ev
     await websocket.accept()
+    last_sent_eh = last_sent_ev = -1
+    state.temperature = state.humidity = None
     state.esp32_connected = True
     state.esp32_socket = websocket
     print("[WS ESP32] ¡ESP32 DevKit V1 conectado al servidor!")
@@ -705,22 +709,26 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
+            if state.esp32_socket is not websocket:
+                break
             data = data.strip()
 
             # Parsear trama de telemetría de sensores: SENS:T=23.5,H=58.2 o S,235,582,15,...
             if data.startswith("SENS:"):
-                raw = data[5:]
-                pairs = raw.split(",")
-                for p in pairs:
-                    if "=" in p:
-                        k, v = p.split("=")
-                        try:
-                            if k == "T":
-                                state.temperature = float(v)
-                            elif k == "H":
-                                state.humidity = float(v)
-                        except ValueError:
-                            pass
+                for pair in data[5:].split(","):
+                    key, separator, value = pair.partition("=")
+                    if not separator or key not in ("T", "H"):
+                        continue
+                    try:
+                        reading = None if value == "NA" else float(value)
+                    except ValueError:
+                        continue
+                    if reading is not None and not math.isfinite(reading):
+                        continue
+                    if key == "T":
+                        state.temperature = reading
+                    else:
+                        state.humidity = reading
 
                 # Transmitir telemetría en vivo a las aplicaciones móviles
                 await broadcast_to_mobile({
@@ -751,10 +759,21 @@ async def websocket_esp32_endpoint(websocket: WebSocket):
 
 
     except WebSocketDisconnect:
-        state.esp32_socket = None
-        state.esp32_connected = state.serial_connected
-        print("[WS ESP32] ESP32 desconectado por WebSocket.")
-        await broadcast_to_mobile({"type": "esp32_status", "connected": state.esp32_connected})
+        pass
+    finally:
+        if state.esp32_socket is websocket:
+            state.esp32_socket = None
+            is_connected = getattr(state, "serial_connected", False)
+            state.esp32_connected = is_connected
+            if not is_connected:
+                state.temperature = state.humidity = None
+            print("[WS ESP32] ESP32 desconectado por WebSocket.")
+            await broadcast_to_mobile({"type": "esp32_status", "connected": state.esp32_connected})
+            if not is_connected:
+                await broadcast_to_mobile({
+                    "type": "telemetry", "temperature": None, "humidity": None,
+                    "light_state": state.light_state,
+                })
 
 # -----------------------------------------------------------------------------
 # WEBSOCKET 2: COMUNICACIÓN CON EL CELULAR (Móvil)
