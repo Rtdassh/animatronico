@@ -25,6 +25,9 @@
 
 const uint8_t DHT_PIN = 4;
 const uint8_t BUZZER_PIN = 8;
+const uint8_t LIGHT_PIN = 7;
+unsigned long blinkUntil = 0;
+int blinkSaved[4];
 const uint8_t RX_FROM_ESP = 2;
 const uint8_t TX_TO_ESP = 3;
 
@@ -41,10 +44,14 @@ uint16_t dhtErrors = 0, serialErrors = 0;
 uint8_t dhtErrorCode = 0; // 1=inicio, 2/3=respuesta, 4/5=datos, 6=checksum, 7=rango
 
 unsigned long lastSensor = 0, lastStatus = 0, lastScan = 0, lastLCD = 0, lastAuto = 0;
+unsigned long lastReady = 0;
+bool commandWindow = false;
 char commandLine[32];
 uint8_t commandLen = 0;
+bool commandOverflow = false;
 char usbLine[32];
 uint8_t usbLen = 0;
+bool usbOverflow = false;
 
 bool i2cProbe(uint8_t addr) {
   Wire.beginTransmission(addr);
@@ -291,6 +298,21 @@ void processCommand(char *cmd) {
     ack("PONG");
     return;
   }
+  if (strcmp(cmd, "LIGHT:0") == 0 || strcmp(cmd, "LIGHT:1") == 0) {
+    digitalWrite(LIGHT_PIN, cmd[6] == '1' ? HIGH : LOW);
+    ack("LIGHT_OK");
+    return;
+  }
+  if (strcmp(cmd, "BLINK") == 0) {
+    if (!pcaAddr) { ack("PCA_NO_DETECTADO"); return; }
+    for (uint8_t i = 0; i < 4; ++i) {
+      if (!blinkUntil) blinkSaved[i] = servoAngles[i + 2];
+      pcaSetAngle(i + 2, (i % 2 == 0) ? 45 : 105);
+    }
+    blinkUntil = millis() + 140;
+    ack("BLINK_OK");
+    return;
+  }
   if (strncmp(cmd, "CMD:", 4) == 0) {
     char *p = cmd + 4;
     char *token = strtok(p, ",");
@@ -407,12 +429,16 @@ void readCommands() {
     if (c == '\r') continue;
     if (c == '\n') {
       commandLine[commandLen] = 0;
-      if (commandLen) processCommand(commandLine);
+      if (!commandOverflow && commandLen) processCommand(commandLine);
       commandLen = 0;
+      commandOverflow = false;
+    } else if (commandOverflow) {
+      continue;
     } else if (commandLen < sizeof(commandLine) - 1) {
       commandLine[commandLen++] = c;
     } else {
       commandLen = 0;
+      commandOverflow = true;
       ++serialErrors;
     }
   }
@@ -424,23 +450,30 @@ void readUsbCommands() {
     if (c == '\r') continue;
     if (c == '\n') {
       usbLine[usbLen] = 0;
-      if (usbLen) processCommand(usbLine);
+      if (!usbOverflow && usbLen) processCommand(usbLine);
       usbLen = 0;
+      usbOverflow = false;
+    } else if (usbOverflow) {
+      continue;
     } else if (usbLen < sizeof(usbLine) - 1) {
       usbLine[usbLen++] = c;
     } else {
       usbLen = 0;
+      usbOverflow = true;
+      ++serialErrors;
     }
   }
 }
 
 void setup() {
   pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LIGHT_PIN, OUTPUT);
   pinMode(DHT_PIN, INPUT_PULLUP);
   Serial.begin(115200);
   link.begin(9600);
   Wire.begin();
   Wire.setClock(100000);
+  Wire.setWireTimeout(25000, true);
   delay(300);
 
   scanModules();
@@ -454,9 +487,20 @@ void setup() {
 
 void loop() {
   readCommands();
-  readUsbCommands();
-
   unsigned long now = millis();
+  // SoftwareSerial no recibe mientras transmite o el DHT bloquea interrupciones.
+  // R concede una ventana de escucha: el ESP32 inicia una sola orden durante
+  // sus primeros 40 ms y la trama completa (máximo 33 bytes) cabe en 90 ms.
+  if (commandWindow && now - lastReady < 90) {
+    delay(1);
+    return;
+  }
+  commandWindow = false;
+  readUsbCommands();
+  if (blinkUntil && (long)(now - blinkUntil) >= 0) {
+    for (uint8_t i = 0; i < 4; ++i) pcaSetAngle(i + 2, blinkSaved[i]);
+    blinkUntil = 0;
+  }
 
   // Muestreo periódico de sensores cada 2.5 segundos
   if (now - lastSensor >= 2500) {
@@ -506,6 +550,12 @@ void loop() {
   if (now - lastStatus >= 1500) {
     lastStatus = now;
     sendStatus();
+  }
+
+  if (millis() - lastReady >= 120) {
+    link.println(F("R"));
+    lastReady = millis();
+    commandWindow = true;
   }
 }
 

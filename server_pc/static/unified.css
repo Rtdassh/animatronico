@@ -1,0 +1,14 @@
+[hidden] { display: none !important; }
+.workspace-nav { display:flex; gap:6px; padding:8px 0; border-bottom:1px solid var(--border-subtle); }
+.workspace-nav button { background:transparent; color:var(--text-secondary); border:0; border-radius:8px; padding:12px 18px; font:inherit; font-size:15px; font-weight:600; cursor:pointer; }
+.workspace-nav button[aria-selected="true"] { color:var(--text-primary); background:var(--bg-surface-hover); }
+.workspace-nav button:hover { background:var(--bg-surface-hover); }
+.workspace-nav button:focus-visible, a:focus-visible { outline:2px solid var(--accent-cyan); outline-offset:3px; }
+.integration-status { padding:12px 0 18px; font-size:13px; line-height:1.7; color:#b8c5d5; }
+.connection-help { padding:18px 0; line-height:1.6; }
+.connection-help a { color:var(--accent-cyan); }
+#hardwareWorkspace { width:100%; }
+#hardwareFrame { width:100%; height:calc(100dvh - 180px); min-height:640px; border:0; background:var(--bg-app); }
+input, textarea, p, code { user-select:text; }
+::selection { background:#246480; color:white; }
+@media(max-width:540px) { .workspace-nav button { flex:1; padding:12px 8px; } .integration-status { font-size:12px; } }

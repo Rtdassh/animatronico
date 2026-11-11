@@ -24,6 +24,7 @@ const modelStatusPill = document.getElementById('modelStatusPill');
 const ollamaDot = document.getElementById('ollamaDot');
 const modelStatusText = document.getElementById('modelStatusText');
 const voiceSelect = document.getElementById('voiceSelect');
+voiceSelect?.addEventListener('change', () => localStorage.setItem('asistente_voice', voiceSelect.value));
 
 const statusCaption = document.getElementById('statusCaption');
 const subCaption = document.getElementById('subCaption');
@@ -94,6 +95,7 @@ let querySilenceTimer = null;
 let followUpTimer = null;
 
 const WAKE_WORDS = [
+  'oye hube', // Variante fonética que devuelve el modelo local español.
   'oye uve',
   'oye v',
   'oye ve',
@@ -277,7 +279,7 @@ async function checkBackendStatus() {
     }
 
     if (data.voices && voiceSelect) {
-      const currentVal = voiceSelect.value;
+      const currentVal = localStorage.getItem('asistente_voice') || voiceSelect.value || 'windows_local';
       voiceSelect.innerHTML = '';
       for (const [vKey, vName] of Object.entries(data.voices)) {
         const opt = document.createElement('option');
@@ -286,9 +288,7 @@ async function checkBackendStatus() {
         if (vKey === currentVal) opt.selected = true;
         voiceSelect.appendChild(opt);
       }
-      if (!voiceSelect.value && voiceSelect.options.length > 0) {
-        voiceSelect.selectedIndex = 0;
-      }
+      voiceSelect.value = [...voiceSelect.options].some(o => o.value === currentVal) ? currentVal : 'windows_local';
     }
 
     if (data.temperature !== undefined) updateTelemetry(data.temperature, data.humidity);
@@ -505,6 +505,8 @@ function exportWAV(samples, sampleRate) {
 // ============================================================================
 async function startRecording() {
   try {
+    if (!window.isSecureContext || !navigator.mediaDevices) throw new Error("Abre HTTPS y confía en el certificado del asistente.");
+    if (alexaModeEnabled) toggleAlexaMode();
     unlockAudioSession();
     stopGreetingAudio();
 
@@ -618,7 +620,7 @@ function toggleMicrophone() {
 // 7. ENVÍO DE AUDIO WAV AL SERVIDOR FASTAPI
 // ============================================================================
 async function sendAudioToServer(wavBlob) {
-  const selectedVoice = voiceSelect ? voiceSelect.value : 'jorge';
+  const selectedVoice = voiceSelect ? voiceSelect.value : 'windows_local';
   const formData = new FormData();
   formData.append('audio', wavBlob, 'recording.wav');
   formData.append('voice', selectedVoice);
@@ -1229,15 +1231,20 @@ if (sliderBgmVol) {
 // 12. MÓDULO ASISTENTE MANOS LIBRES (TIPO ALEXA / WAKENET)
 // ============================================================================
 function initAlexaMode() {
+  if (!window.isSecureContext) {
+    if (alexaDesc) alexaDesc.textContent = "Requiere HTTPS y certificado de confianza en el celular";
+    if (btnToggleAlexa) btnToggleAlexa.disabled = true;
+    return;
+  }
   // Pre-cargar en segundo plano el saludo ultracorto con Loquendo Jorge para que la respuesta sea instantánea
   try {
-    const prefetchUrl = `/api/tts?text=${encodeURIComponent("¡Dime!")}&voice=jorge`;
+    const prefetchUrl = `/api/tts?text=${encodeURIComponent("¡Dime!")}&voice=windows_local`;
     const prefetchAudio = new Audio();
     prefetchAudio.src = prefetchUrl;
     prefetchAudio.preload = 'auto';
   } catch (_) { }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition = window.LocalSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     if (alexaDesc) alexaDesc.textContent = 'Navegador sin soporte de voz WebSpeech';
     if (btnToggleAlexa) btnToggleAlexa.disabled = true;
@@ -1316,8 +1323,8 @@ function setAlexaUIState(state) {
       alexaModeBar.classList.add('wake-triggered');
       alexaDot.classList.add('hearing');
       if (alexaTitle) alexaTitle.textContent = 'Conversación abierta';
-      alexaDesc.textContent = 'Esperando réplica (3s)...';
-      statusCaption.textContent = 'Escuchando réplica (3s)...';
+      alexaDesc.textContent = 'Esperando réplica (7s)...';
+      statusCaption.textContent = 'Escuchando réplica (7s)...';
       break;
 
     case 'DISABLED':
@@ -1333,7 +1340,7 @@ function startWakeWordRecognition() {
   if (!alexaModeEnabled) return;
   stopAllAlexaRecognition();
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition = window.LocalSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return;
 
   try {
@@ -1352,7 +1359,10 @@ function startWakeWordRecognition() {
 
         const detected = WAKE_WORDS.some(w => transcript.includes(w));
         if (detected) {
-          handleWakeWordDetected();
+          const wake = WAKE_WORDS.find(w => transcript.includes(w));
+          const query = transcript.slice(transcript.indexOf(wake) + wake.length).trim();
+          if (query) { stopAllAlexaRecognition(); commitQuery(query); }
+          else handleWakeWordDetected();
           break;
         }
       }
@@ -1360,6 +1370,11 @@ function startWakeWordRecognition() {
 
     wakeWordRecognizer.onerror = (e) => {
       console.warn('[WakeWord Recognition Error]', e.error);
+      if (e.error === "not-allowed") {
+        if (alexaModeEnabled) toggleAlexaMode();
+        alexaDesc.textContent = e.message || "Permiso de micrófono denegado. Revisa HTTPS y los permisos.";
+        return;
+      }
       if (alexaModeEnabled && alexaState === 'LISTENING_WAKE') {
         setTimeout(() => {
           if (alexaModeEnabled && alexaState === 'LISTENING_WAKE') {
@@ -1483,7 +1498,7 @@ function startQueryListening(isBargeIn = false, isFollowUp = false) {
     setAlexaUIState('LISTENING_QUERY');
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const SpeechRecognition = window.LocalSpeechRecognition || window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) return;
 
   // Si ya hay un queryRecognizer activo, detenerlo limpiamente antes de reiniciar
@@ -1631,7 +1646,7 @@ function onPlaybackCompletedAlexa() {
       stopAllAlexaRecognition();
       startWakeWordRecognition();
     }
-  }, 3000);
+  }, 7000);
 }
 
 // INICIAR AL CARGAR

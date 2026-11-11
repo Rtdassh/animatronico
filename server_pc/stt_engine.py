@@ -7,6 +7,13 @@ import os
 recognizer = sr.Recognizer()
 
 def transcribe_audio_bytes(audio_bytes: bytes, language: str = "es-MX") -> str:
+    from local_speech import transcribe
+    text = transcribe(audio_bytes, language)
+    if not text:
+        raise ValueError("No se entendió el audio. Acerca el micrófono e intenta de nuevo.")
+    return text
+
+def transcribe_audio_bytes_online(audio_bytes: bytes, language: str = "es-MX") -> str:
     """
     Recibe los bytes de un archivo WAV de audio enviado desde el celular (16kHz PCM)
     y realiza el reconocimiento de voz a texto (STT) en español.

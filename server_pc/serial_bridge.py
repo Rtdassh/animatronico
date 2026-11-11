@@ -1,226 +1,176 @@
-"""
-serial_bridge.py - Puente de Comunicación Serie Multi-Dispositivo (ESP32 y Arduino Uno)
-========================================================================================
-Detecta y gestiona conexiones serie simultáneas (/dev/ttyUSB0, /dev/ttyACM0, COMx).
-Despacha comandos cinemáticos de servomotores PCA9685 y recibe telemetría de sensores.
-"""
-
-import sys
-import glob
-import time
+"""Un único enlace ESP32 USB: confirmaciones, telemetría y cola acotada."""
+import os
+import re
 import threading
-from typing import Optional, Callable, Dict
-
-try:
-    import serial
-    import serial.tools.list_ports
-    SERIAL_AVAILABLE = True
-except ImportError:
-    SERIAL_AVAILABLE = False
-
+import time
+from collections import OrderedDict
+import serial
+from serial.tools import list_ports
 
 class SerialHardwareBridge:
-    def __init__(
-        self,
-        baudrate: int = 115200,
-        preferred_port: Optional[str] = None,
-        on_telemetry: Optional[Callable[[float, float], None]] = None,
-        on_status_change: Optional[Callable[[bool, Optional[str]], None]] = None
-    ):
+    def __init__(self, baudrate=115200, preferred_port=None, on_telemetry=None, on_status_change=None):
         self.baudrate = baudrate
-        self.preferred_port = preferred_port
+        self.preferred_port = preferred_port or os.getenv("ANIMATRONICO_PORT")
         self.on_telemetry = on_telemetry
         self.on_status_change = on_status_change
-
-        self.connections: Dict[str, serial.Serial] = {}
-        self.reader_threads: Dict[str, threading.Thread] = {}
+        self._conn = None
         self._running = False
-        self._lock = threading.Lock()
-        self._manager_thread: Optional[threading.Thread] = None
+        self._condition = threading.Condition(threading.RLock())
+        self._write_lock = threading.Lock()
+        self._command_lock = threading.Lock()
+        self._queue = OrderedDict()
+        self._result = None
+        self._last_frame = 0.0
+        self._hardware = {}
 
     @property
-    def is_connected(self) -> bool:
-        with self._lock:
-            return len(self.connections) > 0
+    def is_connected(self):
+        with self._condition:
+            return bool(self._conn and self._conn.is_open)
 
     @property
-    def current_port(self) -> Optional[str]:
-        with self._lock:
-            if not self.connections:
-                return None
-            return ", ".join(self.connections.keys())
+    def current_port(self):
+        with self._condition:
+            return self._conn.port if self._conn else None
+
+    def snapshot(self):
+        with self._condition:
+            age = int((time.monotonic() - self._last_frame) * 1000) if self._last_frame else 0
+            return {**self._hardware, "received": bool(self._last_frame),
+                    "connected": self.is_connected and bool(self._last_frame) and age < 6000,
+                    "frameAgeMs": age, "port": self.current_port}
 
     def find_available_ports(self):
-        """Busca puertos serie disponibles en Linux o Windows."""
-        if not SERIAL_AVAILABLE:
-            return []
-
-        ports = []
         if self.preferred_port:
-            ports.append(self.preferred_port)
-
-        if sys.platform.startswith("linux"):
-            for pattern in ["/dev/ttyUSB*", "/dev/ttyACM*"]:
-                for p in sorted(glob.glob(pattern)):
-                    if p not in ports:
-                        ports.append(p)
-        else:
-            try:
-                for p in serial.tools.list_ports.comports():
-                    if p.device not in ports:
-                        ports.append(p.device)
-            except Exception:
-                pass
-
-        return ports
+            return [self.preferred_port]
+        return [p.device for p in list_ports.comports() if p.vid == 0x10C4 and p.pid == 0xEA60]
 
     def start(self):
-        """Inicia el monitor de puertos serie en segundo plano."""
-        if not SERIAL_AVAILABLE:
-            print("[SerialBridge] ADVERTENCIA: pyserial no está disponible.")
-            return
-
         self._running = True
-        self._manager_thread = threading.Thread(target=self._port_manager_loop, daemon=True, name="SerialManager")
-        self._manager_thread.start()
-        print("[SerialBridge] Monitor multi-puerto iniciado.")
+        threading.Thread(target=self._manager, daemon=True, name="ESP32Serial").start()
+        threading.Thread(target=self._writer, daemon=True, name="HardwareCommands").start()
 
     def stop(self):
-        """Detiene todos los hilos y cierra ordenadamente todas las conexiones."""
         self._running = False
-        with self._lock:
-            for port, conn in list(self.connections.items()):
-                try:
-                    conn.close()
-                except Exception:
-                    pass
-            self.connections.clear()
+        with self._condition:
+            if self._conn:
+                self._conn.close()
+            self._conn = None
+            self._condition.notify_all()
 
-        print("[SerialBridge] Todas las conexiones serie fueron liberadas.")
-
-    def write_command(self, cmd: str) -> bool:
-        """Transmite el comando a todos los microcontroladores conectados."""
-        data = (cmd.strip() + "\n").encode("utf-8", errors="ignore")
-        sent_any = False
-
-        with self._lock:
-            for port, conn in list(self.connections.items()):
-                try:
-                    if conn.is_open:
-                        conn.write(data)
-                        conn.flush()
-                        sent_any = True
-                except Exception as e:
-                    print(f"[SerialBridge] Error al escribir en {port}: {e}")
-                    self._close_single(port)
-
-        return sent_any
-
-    def _port_manager_loop(self):
-        """Monitorea puertos disponibles y conecta automáticamente nuevos dispositivos."""
-        while self._running:
-            candidates = self.find_available_ports()
-            for port in candidates:
-                with self._lock:
-                    already_connected = port in self.connections
-
-                if not already_connected and self._running:
-                    self._connect_port(port)
-
-            time.sleep(2.0)
-
-    def _connect_port(self, port: str):
-        """Intenta abrir un puerto serie específico e inicia su hilo lector."""
-        try:
-            s = serial.Serial()
-            s.port = port
-            s.baudrate = self.baudrate
-            s.timeout = 0.5
-            s.write_timeout = 0.5
-            s.dtr = False
-            s.rts = False
-            s.open()
-
-            time.sleep(0.3)
-            s.reset_input_buffer()
-            s.write(b"PING\n")
-
-            with self._lock:
-                self.connections[port] = s
-
-            t = threading.Thread(target=self._reader_loop, args=(port, s), daemon=True, name=f"SerialReader-{port}")
-            self.reader_threads[port] = t
-            t.start()
-
-            print(f"[SerialBridge] Enlace serie conectado en: {port} ({self.baudrate} bps)")
-            if self.on_status_change:
-                self.on_status_change(True, self.current_port)
-        except Exception:
-            pass
-
-    def _reader_loop(self, port: str, s: serial.Serial):
-        """Hilo de lectura continua para un puerto determinado."""
-        while self._running:
+    def request_command(self, command, timeout=4.0):
+        if not re.fullmatch(r"[A-Z0-9_:,=\-]{1,31}", command):
+            return {"ok": False, "ack": "COMANDO_INVALIDO"}
+        with self._command_lock:
+            if not self.is_connected:
+                return {"ok": False, "ack": "ESP32_DESCONECTADO"}
+            with self._condition:
+                self._result = None
             try:
-                if not s.is_open:
+                with self._write_lock:
+                    self._conn.write((command + "\n").encode())
+                deadline = time.monotonic() + timeout
+                with self._condition:
+                    while self._result is None and self.is_connected:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            break
+                        self._condition.wait(remaining)
+                    ack = self._result or "SIN_CONFIRMACION"
+                return {"ok": ack in {"PONG", "SCAN_OK", "BEEP_OK", "AUTO_ON", "AUTO_OFF",
+                                       "CMD_OK", "PWM_ENVIADO", "ALL_PWM_OK", "LIGHT_OK", "BLINK_OK"}, "ack": ack}
+            except (OSError, serial.SerialException, AttributeError):
+                return {"ok": False, "ack": "ESP32_DESCONECTADO"}
+
+    @staticmethod
+    def normalize(command):
+        command = command.strip()
+        if not command.startswith("CMD:"):
+            return [command]
+        values = dict(re.findall(r"(EH|EV|M|B|L)=(-?\d+)", command))
+        orders = []
+        eyes = [f"{key}={values[key]}" for key in ("EH", "EV") if key in values]
+        if eyes:
+            orders.append("CMD:" + ",".join(eyes))
+        if "M" in values:
+            orders.append(f"S6:{max(30, min(150, int(values['M'])))}")
+        if values.get("B") == "1":
+            orders.append("BLINK")
+        if values.get("L") in ("0", "1"):
+            orders.append("LIGHT:" + values["L"])
+        return orders
+
+    def write_command(self, command):
+        if not self.is_connected:
+            return False
+        with self._condition:
+            for order in self.normalize(command):
+                key = order.split(":", 1)[0]
+                self._queue[key] = order
+            while len(self._queue) > 24:
+                self._queue.popitem(last=False)
+            self._condition.notify_all()
+        return True
+
+    def _writer(self):
+        while self._running:
+            with self._condition:
+                if not self._queue:
+                    self._condition.wait(0.2)
+                    continue
+                _, command = self._queue.popitem(last=False)
+            self.request_command(command)
+
+    def _manager(self):
+        while self._running:
+            for port in self.find_available_ports():
+                if not self._running:
                     break
-                line = s.readline()
-                if line:
-                    text = line.decode("utf-8", errors="replace").strip()
-                    if text:
-                        self._process_line(text, port)
-            except Exception:
-                break
-
-        self._close_single(port)
-
-    def _close_single(self, port: str):
-        """Cierra un puerto individual tras desconexión física."""
-        with self._lock:
-            conn = self.connections.pop(port, None)
-            if conn:
                 try:
-                    conn.close()
-                except Exception:
+                    conn = serial.Serial(port=None, baudrate=self.baudrate, timeout=0.2, write_timeout=1)
+                    conn.port = port
+                    conn.dtr = False
+                    conn.rts = False
+                    conn.open()
+                    with self._condition:
+                        self._conn = conn
+                    if self.on_status_change:
+                        self.on_status_change(True, port)
+                    while self._running and conn.is_open:
+                        line = conn.readline().decode("utf-8", errors="replace").strip()
+                        if line:
+                            self._process_line(line, port)
+                except (OSError, serial.SerialException):
                     pass
-            still_connected = len(self.connections) > 0
-            cur = self.current_port
+                finally:
+                    with self._condition:
+                        if self._conn:
+                            self._conn.close()
+                        self._conn = None
+                        self._condition.notify_all()
+                    if self.on_status_change:
+                        self.on_status_change(False, None)
+            time.sleep(1)
 
-        if self.on_status_change:
-            self.on_status_change(still_connected, cur)
-
-    def _process_line(self, line: str, port: str):
-        """Parsea tramas de telemetría y confirma ejecución."""
-        # 1. Telemetría estándar: S,temp10,hum10...
-        if "S," in line:
-            idx = line.find("S,")
-            sub = line[idx + 2:]
-            parts = sub.split(",")
-            if len(parts) >= 2:
-                try:
-                    t10 = int(parts[0])
-                    h10 = int(parts[1])
-                    temp = round(t10 / 10.0, 1) if t10 > -3000 else None
-                    hum = round(h10 / 10.0, 1) if h10 >= 0 else None
-                    if temp is not None and hum is not None and self.on_telemetry:
-                        self.on_telemetry(temp, hum)
-                except ValueError:
-                    pass
-
-        # 2. Telemetría explícita o Heartbeat con datos
-        elif ("SENS:" in line) or ("HEARTBEAT:OK" in line):
-            temp = None
-            hum = None
-            pairs = line.replace("SENS:", "").replace("HEARTBEAT:OK,", "").split(",")
-            for p in pairs:
-                if "=" in p:
-                    k, v = p.split("=", 1)
-                    try:
-                        if k.strip() == "T":
-                            temp = float(v.strip())
-                        elif k.strip() == "H":
-                            hum = float(v.strip())
-                    except ValueError:
-                        pass
-            if temp is not None and hum is not None and self.on_telemetry:
-                self.on_telemetry(temp, hum)
+    def _process_line(self, line, port=None):
+        if line.startswith("RESULT UNO: "):
+            with self._condition:
+                self._result = line.removeprefix("RESULT UNO: ")
+                self._condition.notify_all()
+        if not line.startswith("TELEMETRIA UNO: S,"):
+            return
+        try:
+            data = list(map(int, line.split("S,", 1)[1].split(",")))
+            if len(data) != 12:
+                return
+            t, h, flags, s0, s1, auto, uptime, de, se, lm, lcd, pca = data
+        except ValueError:
+            return
+        with self._condition:
+            self._last_frame = time.monotonic()
+            self._hardware = dict(temp10=t, hum10=h, lm=bool(flags & 1), dht=bool(flags & 2),
+                                  lcd=bool(flags & 4), pca=bool(flags & 8), s0=s0, s1=s1,
+                                  auto=bool(auto), uptime=uptime, dhtErrors=de, serialErrors=se,
+                                  lmAddr=lm, lcdAddr=lcd, pcaAddr=pca, ack=self._result or "")
+        if self.on_telemetry:
+            self.on_telemetry(t / 10 if t > -3000 else None, h / 10 if h >= 0 else None)

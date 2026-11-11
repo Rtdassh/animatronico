@@ -306,7 +306,9 @@ const char PANEL_HTML[] PROGMEM = R"HTML(
 <script>
 const $=id=>document.getElementById(id);
 const angles=new Array(16).fill(90);
-let debounceTimer=null;
+const debounceTimers={};
+const commandQueue=[];
+let sendingCommand=false;
 
 function switchTab(t){
   $('tab-diag').className='tab-content'+(t==='diag'?' active':'');
@@ -326,14 +328,32 @@ const formatT=v=>v<=-3000?'—':(v/10).toFixed(1)+' °C';
 const formatH=v=>v<0?'—':(v/10).toFixed(1)+' %';
 const add=(el,txt)=>{const li=document.createElement('li');li.textContent=txt;el.appendChild(li);};
 
-async function cmd(c){
+function cmd(c){
+  const channel=/^S\d+:/.exec(c);
+  const pending=channel?commandQueue.findIndex(x=>x.startsWith(channel[0])):-1;
+  if(pending>=0)commandQueue[pending]=c;
+  else commandQueue.push(c);
+  drainCommands();
+}
+
+async function drainCommands(){
+  if(sendingCommand)return;
+  sendingCommand=true;
+  try{
+    while(commandQueue.length)await performCommand(commandQueue.shift());
+  }finally{
+    sendingCommand=false;
+  }
+}
+
+async function performCommand(c){
   $('act').textContent='Enviando comando: '+c+'...';
   try{
     const r=await fetch('/api/cmd?c='+encodeURIComponent(c));
     const j=await r.json();
     $('act').textContent='Comando: '+c;
-    $('act-ack').textContent='ACK: '+(j.ok?(j.ack||'OK'):'ERROR');
-    if(c.startsWith('S_ALL:')){
+    $('act-ack').textContent='ACK: '+(j.ack||j.error||'SIN CONFIRMACIÓN');
+    if(j.ok&&c.startsWith('S_ALL:')){
       const a=parseInt(c.substring(6));
       if(!isNaN(a)){
         for(let i=0;i<16;i++){
@@ -354,13 +374,14 @@ function onSlider(ch,val){
   const el=$('ang-'+ch);
   if(el)el.textContent=val+'°';
   angles[parseInt(ch)]=parseInt(val);
-  clearTimeout(debounceTimer);
-  debounceTimer=setTimeout(()=>{
+  clearTimeout(debounceTimers[ch]);
+  debounceTimers[ch]=setTimeout(()=>{
     sendServo(ch,val);
-  },70);
+  },180);
 }
 
 function sendServo(ch,val){
+  clearTimeout(debounceTimers[ch]);
   cmd('S'+ch+':'+val);
 }
 
@@ -385,24 +406,21 @@ async function refresh(){
     const r=await fetch('/api/status');
     const d=await r.json();
     const w=$('warnings');w.innerHTML='';
+    // frameAgeMs ya es una duración calculada por el ESP32; sus millis()
+    // no comparten el origen de tiempo de Date.now() en el celular.
+    const sec=Math.floor(d.frameAgeMs/1000);
     if(!d.connected){
-      $('uart').className='pill bad';$('uart').textContent='SIN DATOS';
-      $('age').textContent='Última trama UART: nunca';
-      add(w,'Arduino Uno no está enviando datos al ESP32.');
+      $('uart').className='pill bad';$('uart').textContent=d.received?'TRAMA DETENIDA':'SIN DATOS';
+      $('age').textContent=d.received?'Última trama recibida hace '+sec+' s':'Última trama UART: nunca';
+      add(w,d.received?'Se interrumpió la recepción de telemetría desde Arduino.':'Arduino Uno no está enviando datos al ESP32.');
       add(w,'Verifique: GND común, D3 -> Divisor 1k/2k -> RX2 (GPIO 16), TX2 (GPIO 17) -> D2.');
       return;
     }
-    const sec=Math.round((Date.now()-d.lastFrame)/1000);
-    if(sec>4){
-      $('uart').className='pill bad';$('uart').textContent='TRAMA DETENIDA';
-      $('age').textContent='Última trama recibida hace '+sec+' s';
-      add(w,'Se interrumpió la recepción de telemetría desde Arduino.');
-    }else{
-      $('uart').className='pill ok';$('uart').textContent='CONECTADO ('+sec+'s)';
-      $('age').textContent='Uptime Arduino: '+d.uptime+' s | ACK: '+(d.ack||'—');
-    }
+    $('uart').className='pill ok';$('uart').textContent='CONECTADO ('+sec+'s)';
+    $('age').textContent='Uptime Arduino: '+d.uptime+' s | ACK: '+(d.ack||'—');
     badge('lm',d.lm,'NO DETECTADO');badge('dht',d.dht,'LECTURA FALLÓ');
-    badge('lcd',d.lcd,'NO DETECTADA');badge('pca',d.pca,'NO DETECTADO');
+    badge('lcd',d.lcd,'NO CONECTADA');badge('pca',d.pca,'NO DETECTADO');
+    if(!d.lcd)$('lcd').className='pill neutral';
     $('temp').textContent=formatT(d.temp10);$('hum').textContent=formatH(d.hum10);
     $('lmaddr').textContent='Dirección I²C: '+(d.lmAddr?'0x'+d.lmAddr.toString(16):'—');
     $('lcdaddr').textContent='Dirección I²C: '+(d.lcdAddr?'0x'+d.lcdAddr.toString(16):'—');
@@ -410,12 +428,11 @@ async function refresh(){
     $('dhterr').textContent='Lecturas DHT11 fallidas: '+d.dhtErrors;
     if(!d.lm)add(w,'LM75A: Verifique alimentación 5V, GND, SDA a A4, SCL a A5 y dirección (0x48-0x4F).');
     if(!d.dht)add(w,'DHT11: Verifique DATA en D4, 5V, GND y resistencia pull-up (10k si no es módulo de 3 pines).');
-    if(!d.lcd)add(w,'LCD 1602: No responde en 0x27 ni 0x3F. Verifique cableado I2C (A4/A5) y ajuste el contraste.');
     if(!d.pca)add(w,'PCA9685: Verifique alimentación lógica VCC (5V Arduino), GND, SDA/A4 y SCL/A5.');
     if(d.pca)add(w,'PCA9685 activo. Recuerde alimentar el borne verde V+/GND a 5.0 V externos para mover los servos.');
     if(d.lcd)add(w,'LCD activa. Si no visualiza caracteres, ajuste el potenciómetro azul de contraste del backpack.');
-    if(d.serialErrors)add(w,'Arduino reporta '+d.serialErrors+' errores en comandos serie recibidos.');
-    if(d.lm&&d.dht&&d.lcd&&d.pca)add(w,'Todos los módulos de hardware reportan respuesta lógica correcta.');
+    if(d.serialErrors)add(w,'Comandos serie rechazados o desbordados desde el arranque: '+d.serialErrors+'. Contador acumulado; no indica por sí solo una falla actual.');
+    if(d.lm&&d.dht&&d.pca)add(w,'Sensores y controlador de servos responden correctamente.');
   }catch(e){
     $('uart').className='pill bad';$('uart').textContent='WEB DESCONECTADA';
     $('warnings').textContent='El dispositivo móvil no puede comunicarse con el ESP32. Verifique la conexión Wi-Fi.';

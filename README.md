@@ -2,6 +2,8 @@
 
 Sistema robótico y de sensado ambiental desacoplado en 4 niveles de cómputo y control. Esta rama (`feature/asistente-escritorio`) adapta y unifica la arquitectura del **Asistente de Escritorio Autónomo con Diagnóstico Web Móvil** y el sistema de **Inteligencia Artificial Local (Qwen 2.5 + Loquendo + Visión OpenCV)**.
 
+La aplicación integrada se inicia con **`iniciar_web_unificada.bat`**: usa el Wi-Fi del ESP32 y reúne asistente, visión, micrófono del celular por HTTPS, sensores y los 16 canales de servo. Consulta [la guía de la web unificada](docs/GUIA_WEB_UNIFICADA.md) para instalar el certificado del celular y usar el modo sin tocar sin depender de internet.
+
 ---
 
 ## 🏛️ Modos de Funcionamiento
@@ -35,7 +37,7 @@ No requiere computadora ejecutándose. El ESP32 crea su propio Punto de Acceso W
 ```
 
 ### Modo 2: Modo Inteligente con PC Local (Loquendo, Qwen 2.5 y Visión Facial)
-Conecta el ESP32 por WebSockets al servidor FastAPI en la computadora, añadiendo procesamiento de lenguaje natural local con Ollama (Qwen 2.5), síntesis de voz Loquendo y visión facial a 30 FPS mediante OpenCV.
+La computadora se conecta al Wi-Fi del ESP32 y mantiene un único enlace USB con esa placa. Sirve la web integrada por HTTPS, con Ollama local, reconocimiento español Vosk, voces locales y visión mediante OpenCV. El celular usa esa misma red para todos los controles y el modo manos libres; el navegador se conecta al servidor por HTTPS y WebSocket seguro.
 
 ---
 

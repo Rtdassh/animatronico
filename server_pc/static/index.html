@@ -3,26 +3,25 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#090c10">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>V de Venganza · Asistente Animatrónico</title>
 
-  <!-- Google Fonts: Inter / Plus Jakarta Sans & JetBrains Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
-    rel="stylesheet">
-
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="unified.css">
 </head>
 
 <body>
 
   <div class="app-container">
 
+    <nav class="workspace-nav" role="tablist" aria-label="Espacios de trabajo"><button data-workspace="assistant" role="tab" aria-controls="assistantWorkspace" aria-selected="true">Asistente y visión</button><button data-workspace="hardware" role="tab" aria-controls="hardwareWorkspace" aria-selected="false">Hardware y servos</button></nav>
+    <p class="integration-status" id="integrationStatus" role="status">Conectando con el sistema local…</p>
+    <p class="connection-help" id="connectionHelp" hidden>Para el micrófono del celular, instala el certificado desde <a href="/setup">la configuración HTTPS</a>.</p>
+    <section id="hardwareWorkspace" role="tabpanel" hidden><iframe id="hardwareFrame" title="Sensores, diagnóstico y los 16 canales de servo"></iframe></section>
+    <section id="assistantWorkspace" role="tabpanel">
     <!-- CABECERA PRINCIPAL -->
     <header class="app-header">
       <div class="brand">
@@ -71,7 +70,8 @@
       <div class="voice-selector">
         <label for="voiceSelect">Voz</label>
         <select id="voiceSelect">
-          <option value="jorge" selected>Jorge (España - Loquendo Clásico)</option>
+          <option value="windows_local" selected>Voz local Windows (sin internet)</option>
+          <option value="jorge">Jorge (España - Loquendo Clásico)</option>
           <option value="carlos">Carlos (Latinoamérica - Loquendo)</option>
           <option value="carmen">Carmen (España - Loquendo)</option>
           <option value="diego">Diego (Argentina - Loquendo)</option>
@@ -270,6 +270,7 @@
         </div>
       </div>
     </footer>
+    </section>
 
   </div>
 
@@ -279,7 +280,9 @@
   <!-- ELEMENTO DE AUDIO PARA MÚSICA DE FONDO LOQUENDO -->
   <audio id="loquendoBgm" preload="auto" playsinline loop src="/audio/musica_loquendo.mp4"></audio>
 
+  <script src="local-speech.js"></script>
   <script src="app.js"></script>
+  <script src="unified.js"></script>
 </body>
 
 </html>

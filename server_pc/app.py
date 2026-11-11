@@ -159,7 +159,7 @@ state = SystemState()
 # -----------------------------------------------------------------------------
 class ChatRequest(BaseModel):
     text: str
-    voice: str = "jorge"
+    voice: str = "windows_local"
     history: List[Dict[str, str]] = []
 
 class ControlRequest(BaseModel):
@@ -296,21 +296,24 @@ def sanitize_ai_reply(text: str) -> str:
     clean = re.sub(r'\[LUZ_ON\]|\[LUZ_OFF\]|\[BLINK\]|\[SERVO_[^\]]+\]|\[AGREGAR_AGENDA:[^\]]+\]', '', text)
     return clean_for_speech(clean)
 
-def synthesize_speech(text: str, voice_key: str = "jorge") -> tuple[bytes, str, str]:
-    """
-    Sintetiza la voz utilizando Voicebox (esqueleto dinámico) o Loquendo (Jorge, Carlos, Carmen).
-    Retorna: (audio_bytes, audio_filename, media_type).
-    """
+def synthesize_speech(text: str, voice_key: str = "windows_local") -> tuple[bytes, str, str]:
+    """La consulta conserva su respuesta si una voz de internet no está disponible."""
+    from offline_tts import generate
     vk = voice_key.lower().strip()
-    if vk.startswith("voicebox") or vk == "dom":
-        profile_id = None
-        if "_" in vk:
-            profile_id = vk.split("_", 1)[1]
-        audio_bytes, audio_filename = generate_voicebox_speech(text, profile_id=profile_id)
-        return audio_bytes, audio_filename, "audio/wav"
-    else:
-        audio_bytes, audio_filename = generate_loquendo_speech(text, voice_key=vk)
-        return audio_bytes, audio_filename, "audio/mpeg"
+    if vk == "windows_local":
+        return generate(text)
+    try:
+        if vk.startswith("voicebox") or vk == "dom":
+            profile_id = vk.split("_", 1)[1] if "_" in vk else None
+            audio, filename = generate_voicebox_speech(text, profile_id=profile_id)
+            return audio, filename, "audio/wav"
+        allow_network = (os.getenv("ANIMATRONICO_LOCAL_NETWORK") != "1" or
+                         os.getenv("ANIMATRONICO_INTERNET_SHARED") == "1")
+        audio, filename = generate_loquendo_speech(text, voice_key=vk, allow_network=allow_network)
+        return audio, filename, "audio/mpeg"
+    except Exception as exc:
+        print(f"[Voz] {vk} no disponible ({type(exc).__name__}); usando voz local.", flush=True)
+        return generate(text)
 
 # -----------------------------------------------------------------------------
 # RUTAS DE LA API HTTP
@@ -318,9 +321,10 @@ def synthesize_speech(text: str, voice_key: str = "jorge") -> tuple[bytes, str, 
 @app.get("/api/status")
 async def get_status():
     """Devuelve el estado completo del servidor, telemetría, Ollama y voces disponibles."""
-    ollama_info = check_ollama()
-    vb_ready = is_voicebox_running()
-    voices_dict = {k: v["name"] for k, v in VOICES.items()}
+    ollama_info = await asyncio.to_thread(check_ollama)
+    vb_ready = await asyncio.to_thread(is_voicebox_running)
+    voices_dict = {k: v["name"] + " · requiere internet para frases nuevas" for k, v in VOICES.items()}
+    voices_dict["windows_local"] = "Voz local Windows (sin internet)"
     if vb_ready:
         profiles = get_voicebox_profiles()
         if profiles:
@@ -356,7 +360,7 @@ async def get_status():
 @app.post("/api/process-audio")
 async def process_audio(
     audio: UploadFile = File(...),
-    voice: str = Form("jorge"),
+    voice: str = Form("windows_local"),
     history_json: str = Form("[]")
 ):
     """
@@ -483,7 +487,7 @@ async def manual_control(req: ControlRequest):
         ang = max(30, min(150, req.angle))
         cmd_ch = f"S{ch}:{ang}\n"
         sent_ch = await send_hardware_command(cmd_ch)
-        if ch == 0:
+        if ch == 6:
             state.mouth_angle = ang
         return {"status": "ok" if sent_ch else "error", "sent_cmd": cmd_ch.strip(), "channel": ch, "angle": ang}
 
@@ -493,12 +497,11 @@ async def manual_control(req: ControlRequest):
     if req.light in (0, 1):
         state.light_state = req.light
 
-    # Enviar comando de Canal 0 en PCA9685 (la primera opción de la interfaz)
-    await send_hardware_command(f"S0:{state.mouth_angle}\n")
+    # El puente separa boca CH6, ojos CH0/1, párpados CH2-5 y luz D7.
     cmd = f"CMD:M={state.mouth_angle},EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={req.blink},L={state.light_state}\n"
     sent = await send_hardware_command(cmd)
     if sent:
-        return {"status": "ok", "sent_cmd": f"S0:{state.mouth_angle}"}
+        return {"status": "ok", "sent_cmd": f"S6:{state.mouth_angle}"}
     return {"status": "buffered", "note": "Hardware no conectado aún"}
 
 # -----------------------------------------------------------------------------
@@ -626,7 +629,7 @@ async def serve_audio(filename: str):
     raise HTTPException(status_code=404, detail="Audio no encontrado")
 
 @app.get("/api/tts")
-async def get_tts(text: str, voice: str = "jorge"):
+async def get_tts(text: str, voice: str = "windows_local"):
     """Generación rápida directa de audio para cualquier texto arbitrario sin bloquear el event loop."""
     if not text.strip():
         raise HTTPException(status_code=400, detail="Texto vacío")
@@ -794,7 +797,7 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
             if event_type == "lipsync_frame":
                 mouth_angle = int(msg.get("mouth", 90))
                 state.mouth_angle = max(30, min(150, mouth_angle))
-                await send_hardware_command(f"S0:{state.mouth_angle}\n")
+                await send_hardware_command(f"S6:{state.mouth_angle}\n")
 
             # Notificación de palabra clave Wake-Word ("Oye Robot", "Alexa")
             elif event_type == "wake_alert":
@@ -830,8 +833,7 @@ async def websocket_mobile_endpoint(websocket: WebSocket):
                 state.eyes_vertical_angle = max(30, min(150, ev))
                 state.light_state = l
 
-                # Enviar S0: directo para el servo en el Canal 0 del PCA9685
-                await send_hardware_command(f"S0:{state.mouth_angle}\n")
+                # El puente divide el comando combinado en órdenes cortas.
                 cmd = f"CMD:M={state.mouth_angle},EH={state.eyes_angle},EV={state.eyes_vertical_angle},B={b},L={state.light_state}\n"
                 await send_hardware_command(cmd)
 
@@ -875,6 +877,9 @@ async def broadcast_to_mobile(payload: Dict[str, Any]):
 # -----------------------------------------------------------------------------
 # MONTAR APLICACIÓN WEB ESTÁTICA
 # -----------------------------------------------------------------------------
+from unified import create_router
+app.include_router(create_router(lambda: serial_bridge))
+
 app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 
 if __name__ == "__main__":

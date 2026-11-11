@@ -49,4 +49,7 @@ Desktop.ini
 *.elf
 *.map
 build/
+server_pc/models/
+server_pc/certs/
+server_pc/data/unified-runtime.json
 **/build/

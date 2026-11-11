@@ -114,14 +114,16 @@ El firmware del Arduino incluye un escáner I2C autónomo al inicio y cada 10 se
   ```text
   S,temp10,hum10,flags,servo0,servo1,autoMode,uptime,dhtErrors,serialErrors,lmAddr,lcdAddr,pcaAddr
   ```
+- **Recepción coordinada:** El Uno envía `R` cuando abre una ventana de escucha de 90 ms. El ESP32 espera una nueva ventana y comienza una sola orden durante los primeros 40 ms. Durante la ventana, el Uno aplaza las lecturas de sensores y la telemetría para evitar pérdidas de caracteres en `SoftwareSerial`. Se deben actualizar los dos firmwares juntos.
+- **Contador serie:** `serialErrors` acumula comandos inválidos o buffers desbordados desde el arranque del Uno; no representa errores nuevos en cada consulta. El LCD puede permanecer desconectado y se muestra como opcional en el panel.
 - **Lógica de Alerta Automática:** Si la temperatura es $\ge 30.0^\circ\text{C}$ o la humedad es $\ge 75\%$, activa un tono en el buzzer y posiciona el servo en 130° como señal de advertencia.
 
 ### 4.2. ESP32 DevKit V1 (`asistente_esp32.ino`)
 - **Punto de Acceso Wi-Fi:** Genera la red inalámbrica `Asistente-ESP32` con cifrado WPA2.
 - **Servidor Web Embebido:** Sirve `panel.h` directamente en la raíz `/` con compresión en memoria flash (`PROGMEM`) y cero dependencias de almacenamiento SPIFFS/LittleFS.
 - **API REST Local:**
-  - `GET /api/status`: Devuelve el JSON de telemetría completa en tiempo real.
-  - `GET /api/cmd?c=<comando>`: Envía comandos (`PING`, `SCAN`, `BEEP`, `S0:45`, `S0:90`, `S0:135`, `AUTO:1`) por UART2 hacia el Arduino Uno y retorna el acuse de recibo (`ACK`).
+  - `GET /api/status`: Devuelve el JSON de telemetría completa. `frameAgeMs` indica los milisegundos desde la última trama, calculados por el ESP32. `received` distingue el arranque sin datos de una pérdida posterior; `connected` pasa a falso tras 6 segundos sin telemetría. El panel no compara `millis()` con el reloj del celular. El comando USB `STATUS` devuelve el mismo JSON.
+  - `GET /api/cmd?c=<comando>`: Envía comandos (`PING`, `SCAN`, `BEEP`, `S0:45`, `S0:90`, `S0:135`, `AUTO:1`) por UART2 y retorna su propio `ACK`. `ok` solo es verdadero para confirmaciones de éxito. Las órdenes que cambian el estado esperan además su trama actualizada; si no llega confirmación, se informa `SIN_CONFIRMACION`, `UNO_NO_DISPONIBLE` o `TELEMETRIA_NO_CONFIRMADA`. El panel envía las órdenes en secuencia y sustituye posiciones pendientes del mismo servo.
 
 ---
 

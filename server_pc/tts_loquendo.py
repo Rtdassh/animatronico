@@ -170,7 +170,7 @@ def split_text_into_chunks(text: str, max_chars: int = 280) -> list[str]:
         chunks.append(current)
     return chunks
 
-def generate_loquendo_speech(text: str, voice_key: str = "jorge") -> tuple[bytes, str]:
+def generate_loquendo_speech(text: str, voice_key: str = "jorge", allow_network: bool = True) -> tuple[bytes, str]:
     """
     Sintetiza el texto completo utilizando la voz de Loquendo seleccionada.
     Incluye caché en disco para optimizar latencia en frases idénticas.
@@ -190,6 +190,9 @@ def generate_loquendo_speech(text: str, voice_key: str = "jorge") -> tuple[bytes
     if cache_path.exists() and cache_path.stat().st_size > 1000:
         with open(cache_path, "rb") as f:
             return f.read(), filename
+
+    if not allow_network:
+        raise RuntimeError("Esta voz requiere internet para frases nuevas.")
 
     chunks = split_text_into_chunks(text)
     if not chunks:
