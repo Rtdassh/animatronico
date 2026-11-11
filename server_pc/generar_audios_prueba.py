@@ -23,7 +23,7 @@ TEST_AUDIOS = [
     {
         "alias": "prueba_sensores_jorge.mp3",
         "voice": "jorge",
-        "text": "Segun mi sensor digital LM75A, la temperatura actual en el laboratorio es de 23.5 grados Celsius, con una humedad del 50 por ciento."
+        "text": "Segun mi sensor digital DHT11, la temperatura actual en el laboratorio es de 23.5 grados Celsius, con una humedad del 50 por ciento."
     },
     {
         "alias": "prueba_identificacion_jorge.mp3",

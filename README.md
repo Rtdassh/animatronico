@@ -2,6 +2,10 @@
 
 Sistema robótico interactivo de 4 niveles que desacopla el procesamiento de Inteligencia Artificial (LLM local Qwen 2.5, síntesis de voz neuronal / Loquendo y visión computacional en tiempo real con OpenCV), la pasarela de red inalámbrica Wi-Fi / WebSockets y el control físico en tiempo real determinista.
 
+## Armado del EyeMech ε3.2
+
+Consulta la [guía de armado y puesta en marcha](docs/GUIA_ARMADO_EYEMECH.md) para cablear el Uno, ESP32, PCA9685 y DHT11, calibrar los seis servos en Hold y probar el conjunto. Los planos anteriores con LM75A o módulo de audio quedan como referencia histórica.
+
 ---
 
 ## 🏛️ Arquitectura del Sistema
@@ -17,13 +21,13 @@ Sistema robótico interactivo de 4 niveles que desacopla el procesamiento de Int
  └──────────────────────┘                    └───────────────────────────────┘
                                                              │
                                                     WebSocket / Wi-Fi
-                                                   (Latencia <15 ms)
+                                                     /ws/animatronic
                                                              v
  ┌──────────────────────┐    Hardware UART   ┌───────────────────────────────┐
  │ 4. ARDUINO UNO R3    │ <----------------- │ 3. ESP32 DEVKIT V1            │
  │ • PCA9685 (6x Servos)│(38400 bps / 3.3V)  │ • Pasarela Wi-Fi WebSocket    │
  │ • Mecanismo Ocular   │ Latest-Cmd-Wins    │ • Hardware UART2 (GPIO 16/17) │
- │ • Bus I2C LM75A      │                    │ • Buffer no bloqueante        │
+ │ • Hold/Move en D8    │                    │ • Buffer de movimiento        │
  │ • Sensor DHT11       │                    └───────────────────────────────┘
  │ • Luz Pin D7         │
  └──────────────────────┘
@@ -31,8 +35,8 @@ Sistema robótico interactivo de 4 niveles que desacopla el procesamiento de Int
 
 1. **Smartphone (Nodo de Audio Manos Libres Tipo Alexa):** El celular funciona como micrófono continuo y altavoz inalámbrico. El usuario puede operar sin tocar la pantalla: detecta la palabra clave ("Oye Robot" o "Alexa"), responde de inmediato con "¿En qué te ayudo?", captura la pregunta por voz y reproduce la respuesta de la IA por su altavoz.
 2. **PC Local (Cerebro Central):** Servidor asíncrono en Python con FastAPI. Conecta con el modelo local **Qwen 2.5 (7B)** vía Ollama en hilos no bloqueantes, sintetiza voz neuronal con el esqueleto de **Voicebox** o las voces de **Loquendo** (Jorge, Carlos, Carmen) con caché en disco, gestiona el pipeline de visión artificial a 30+ FPS y administra la telemetría ambiental.
-3. **ESP32 DevKit V1 (Pasarela Inalámbrica):** Cliente WebSocket de alta velocidad conectado a la PC. Reenvía instrucciones de movimiento por `UART2` al Arduino Uno a 38400 baudios con política *Latest-Command-Wins* para evitar saturación de colas.
-4. **Arduino Uno R3 (Controlador de Tiempo Real):** Módulo esclavo libre de interrupciones Wi-Fi que ejecuta un bucle determinista con `millis()`. Gobierna por bus I2C al chip **PCA9685** para 6 servomotores del mecanismo ocular ε3.2 (Will Cogley #1184807) sin temblores (*jitter*), genera parpadeo autónomo, micro-sacadas oculares y reporta telemetría del sensor **LM75A** y **DHT11**.
+3. **ESP32 DevKit V1 (Pasarela Inalámbrica):** Cliente WebSocket de alta velocidad conectado a la PC. Reenvía instrucciones de movimiento por `UART2` al Arduino Uno a 38400 baudios. Conserva el último comando de seguimiento y reenvía por separado las órdenes de luz y parpadeo.
+4. **Arduino Uno R3 (Controlador de movimiento):** Maneja por I²C el **PCA9685** para los seis servos del EyeMech ε3.2. En Hold centra los ojos y cierra los párpados para calibrar. En Move recibe consignas de mirada y genera parpadeos y movimientos autónomos. El **DHT11** entrega temperatura y humedad.
 
 ---
 

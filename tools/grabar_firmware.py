@@ -18,7 +18,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FIRMWARE_DIR = BASE_DIR / "firmware"
-BIN_DIR = FIRMWARE_DIR / "binarios"
+BIN_DIR = BASE_DIR / "build" / "firmware"
 
 ARDUINO_SKETCH_DIR = FIRMWARE_DIR / "arduino_uno_animatronico"
 ESP32_SKETCH_DIR = FIRMWARE_DIR / "esp32_puente_websocket"
@@ -134,11 +134,8 @@ def grabar_arduino(port: str) -> bool:
     print(f"FQBN: {FQBN_ARDUINO}")
     print(f"==================================================")
 
-    hex_file = ARDUINO_BIN_DIR / "arduino_uno_animatronico.ino.hex"
-    if not hex_file.exists():
-        print("[INFO] Binarios precompilados no encontrados. Compilando...")
-        if not compilar_firmware("arduino"):
-            return False
+    if not compilar_firmware("arduino"):
+        return False
 
     cmd = [
         ARDUINO_CLI, "upload",
@@ -165,11 +162,8 @@ def grabar_esp32(port: str) -> bool:
     print(f"FQBN: {FQBN_ESP32}")
     print(f"==================================================")
 
-    bin_file = ESP32_BIN_DIR / "esp32_puente_websocket.ino.bin"
-    if not bin_file.exists():
-        print("[INFO] Binarios precompilados no encontrados. Compilando...")
-        if not compilar_firmware("esp32"):
-            return False
+    if not compilar_firmware("esp32"):
+        return False
 
     print("[AVISO] Si la conexión se detiene en 'Connecting....._____.....', mantén pulsado el botón 'BOOT' en la placa ESP32.")
     
@@ -230,20 +224,19 @@ def menu_interactivo():
     if opcion == "1":
         port = seleccionar_puerto_interactivo("Arduino Uno")
         if port:
-            grabar_arduino(port)
+            return 0 if grabar_arduino(port) else 1
     elif opcion == "2":
         port = seleccionar_puerto_interactivo("ESP32 DevKit V1")
         if port:
-            grabar_esp32(port)
+            return 0 if grabar_esp32(port) else 1
     elif opcion == "3":
         port_ard = seleccionar_puerto_interactivo("Arduino Uno R3")
         port_esp = seleccionar_puerto_interactivo("ESP32 DevKit V1")
-        if port_ard:
-            grabar_arduino(port_ard)
-        if port_esp:
-            grabar_esp32(port_esp)
+        arduino_ok = not port_ard or grabar_arduino(port_ard)
+        esp32_ok = not port_esp or grabar_esp32(port_esp)
+        return 0 if arduino_ok and esp32_ok else 1
     elif opcion == "4":
-        compilar_firmware("all")
+        return 0 if compilar_firmware("all") else 1
     elif opcion == "5":
         ports = get_connected_ports()
         if ports:
@@ -272,20 +265,20 @@ def main():
         return
 
     if args.compile_only:
-        compilar_firmware(args.compile_only)
-        return
+        return 0 if compilar_firmware(args.compile_only) else 1
 
     if args.arduino:
-        grabar_arduino(args.arduino)
-        return
+        return 0 if grabar_arduino(args.arduino) else 1
 
     if args.esp32:
-        grabar_esp32(args.esp32)
-        return
+        return 0 if grabar_esp32(args.esp32) else 1
 
     # Si no se pasaron argumentos, ejecutar menú interactivo
-    menu_interactivo()
+    return menu_interactivo()
 
 if __name__ == "__main__":
-    main()
+    try:
+        sys.exit(main())
+    except FileNotFoundError as error:
+        sys.exit(f"[ERROR] No se pudo ejecutar Arduino CLI: {error}")
 

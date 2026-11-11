@@ -21,11 +21,13 @@ if "%PORT%"=="" (
     exit /b 1
 )
 
-python tools\grabar_firmware.py --arduino %PORT%
+python "%~dp0tools\grabar_firmware.py" --arduino "%PORT%"
 if errorlevel 1 (
     echo [ERROR] Hubo un problema al grabar.
-) else (
-    echo [OK] Grabación finalizada.
+    pause
+    exit /b 1
 )
+echo [OK] Grabación finalizada.
 pause
+exit /b 0
 

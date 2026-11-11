@@ -5,6 +5,8 @@ REM ============================================================================
 chcp 65001 >nul
 title Grabador Firmware - Cabeza Animatronica
 
-python tools\grabar_firmware.py %*
+python "%~dp0tools\grabar_firmware.py" %*
+set "GRABACION_RESULTADO=%ERRORLEVEL%"
 pause
+exit /b %GRABACION_RESULTADO%
 
