@@ -20,7 +20,7 @@ async function integrationHealth() {
       fetch('/api/network').then(r => r.json())
     ]);
     label.textContent = (hardware.connected ? 'Arduino conectado' : 'Esperando Arduino') +
-      ' · ' + (speech.ready ? 'Voz local lista' : 'Modelo de voz pendiente') +
+      ' · ' + (speech.ready ? 'Voz: ' + ({whisper: 'Whisper local', groq: 'Whisper (Groq)', google: 'Google', vosk: 'Vosk local'}[speech.engine] || speech.engine) : 'Reconocimiento de voz no disponible') +
       ' · ' + (window.isSecureContext ? 'Micrófono HTTPS' : 'Abre HTTPS para usar el micrófono') +
       ' · ' + (network.shared ? 'Internet por ESP32' : 'Funciones locales');
     document.getElementById('connectionHelp').hidden = window.isSecureContext;

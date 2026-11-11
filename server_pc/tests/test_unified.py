@@ -75,3 +75,20 @@ def test_second_audio_query_keeps_model_answer_when_online_voice_fails(monkeypat
         assert response.status_code == 200, response.text
         assert response.json()['speech_text'] == 'La temperatura es 21 grados.'
         assert response.json()['audio_base64'].startswith('data:audio/wav;base64,')
+
+def test_loquendo_bgm_audio_served_and_index_structure():
+    import app as backend
+    client = TestClient(backend.app)
+    # Verificar que tanto la ruta .m4a como .mp4 responden OK
+    for ext in ['mp4', 'm4a']:
+        res = client.get(f'/audio/musica_loquendo.{ext}')
+        assert res.status_code == 200
+        assert res.headers.get('content-type') == 'audio/mp4'
+        assert len(res.content) > 100000
+
+    # Verificar que el botón de luz fue retirado y el elemento de música de fondo está presente
+    index_res = client.get('/')
+    assert index_res.status_code == 200
+    assert 'btnToggleLight' not in index_res.text
+    assert 'id="loquendoBgm"' in index_res.text
+    assert 'musica_loquendo' in index_res.text

@@ -26,7 +26,7 @@ No requiere computadora ejecutándose. El ESP32 crea su propio Punto de Acceso W
  │ • Alerta acústica Buzzer                  │ • Sin dependencias de router  │
  └──────────────────────┘                    └──────────────┬────────────────┘
                                                             │
-                                                     UART (9600 bps)
+                                                     UART (38400 bps)
                                                   (Divisor 1kΩ / 2kΩ)
                                                             v
                                              ┌───────────────────────────────┐

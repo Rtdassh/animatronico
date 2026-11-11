@@ -49,14 +49,6 @@
           </svg>
           <span id="humValue">-- %</span>
         </div>
-
-        <button class="telemetry-item telemetry-toggle" id="btnToggleLight" title="Control Pin D7">
-          <svg class="telemetry-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-          </svg>
-          <span id="lightText">Luz: OFF</span>
-        </button>
       </div>
     </header>
 
@@ -202,8 +194,6 @@
         <button class="chip" data-prompt="¿Qué viste en las sombras del laboratorio?">No le di importancia</button>
         <button class="chip" data-prompt="¿Qué fecha y hora tenemos hoy?">Fecha y Hora</button>
         <button class="chip" data-prompt="¿Qué compromisos tengo en mi agenda hoy?">Mi Agenda</button>
-        <button class="chip" data-prompt="Enciende la luz del laboratorio">Encender luz</button>
-        <button class="chip" data-prompt="Apaga la luz del laboratorio">Apagar luz</button>
         <button class="chip" data-prompt="Haz un parpadeo de prueba">Parpadeo</button>
       </div>
     </div>
@@ -257,8 +247,8 @@
         </div>
 
         <div class="slider-row">
-          <label>Música Loquendo <span class="slider-val" id="valBgmVol">15%</span></label>
-          <input type="range" id="sliderBgmVol" min="0" max="40" value="15">
+          <label>Música Loquendo <span class="slider-val" id="valBgmVol">8%</span></label>
+          <input type="range" id="sliderBgmVol" min="0" max="25" value="8">
         </div>
 
         <div class="manual-actions">
@@ -275,7 +265,12 @@
   <audio id="audioPlayer" preload="auto" playsinline></audio>
 
   <!-- ELEMENTO DE AUDIO PARA MÚSICA DE FONDO LOQUENDO -->
-  <audio id="loquendoBgm" preload="auto" playsinline loop src="/audio/musica_loquendo.mp4"></audio>
+  <audio id="loquendoBgm" preload="auto" playsinline loop src="/audio/musica_loquendo.m4a">
+    <source src="/audio/musica_loquendo.m4a" type="audio/mp4">
+    <source src="/audio/musica_loquendo.mp4" type="audio/mp4">
+    <source src="/musica_loquendo.m4a" type="audio/mp4">
+    <source src="/musica_loquendo.mp4" type="audio/mp4">
+  </audio>
 
   <script src="local-speech.js"></script>
   <script src="app.js"></script>

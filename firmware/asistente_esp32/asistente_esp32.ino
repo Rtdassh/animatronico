@@ -9,7 +9,7 @@
         * GPIO 17 (TX2) -> Envía directo a Arduino D2 RX (3.3V compatible)
         * GND común unida a Arduino Uno y Fuente de Servos
     - Servidor Web HTTP (Puerto 80):
-        * Punto de Acceso Wi-Fi: "Asistente-ESP32" (Clave: "arquitectura123")
+        * Punto de Acceso Wi-Fi: "Asistente-ESP32" (Clave: definida en ap_config.h)
         * IP por defecto: 192.168.4.1
   =============================================================================
 */
@@ -18,9 +18,10 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include "panel.h"
+#include "ap_config.h"
 
 const char *AP_NAME = "Asistente-ESP32";
-const char *AP_PASS = "arquitectura123";
+const char *AP_PASS = AP_PASS_VALUE;
 
 HardwareSerial uartLink(2);
 WebServer server(80);

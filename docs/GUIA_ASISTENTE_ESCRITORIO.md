@@ -23,7 +23,7 @@ El proyecto implementa un sistema embebido distribuido en **dos microcontrolador
  │ • Modo Access Point: SSID "Asistente-ESP32" (WPA2)     │
  │ • Servidor Web HTTP embebido en puerto 80 (panel.h)    │
  │ • Parser JSON de telemetría y generador de comandos    │
- │ • Hardware UART2 (GPIO 16 RX2 / GPIO 17 TX2 a 9600 bps)│
+ │ • Hardware UART2 (GPIO 16 RX2/GPIO 17 TX2 a 38400 bps) │
  └───────────────────────────┬────────────────────────────┘
                              │
                       UART Bidireccional
@@ -31,7 +31,7 @@ El proyecto implementa un sistema embebido distribuido en **dos microcontrolador
                              v
  ┌────────────────────────────────────────────────────────┐
  │ 3. NODO DE TIEMPO REAL: Arduino Uno R3 (ATmega328P)    │
- │ • SoftwareSerial en D2 (RX) y D3 (TX) a 9600 bps       │
+ │ • SoftwareSerial en D2 (RX) y D3 (TX) a 38400 bps      │
  │ • Bus I2C Compartido (A4/A5 a 100 kHz):                │
  │    - Sensor LM75A (0x48): Temperatura ambiente         │
  │    - Pantalla LCD 1602 (0x27 / 0x3F): Muestra T° y H%  │

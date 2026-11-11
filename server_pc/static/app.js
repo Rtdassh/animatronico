@@ -124,7 +124,8 @@ const sliderBgmVol = document.getElementById('sliderBgmVol');
 const valBgmVol = document.getElementById('valBgmVol');
 
 let isBgmEnabled = localStorage.getItem('loquendo_bgm_enabled') !== 'false';
-let bgmVolume = parseFloat(localStorage.getItem('loquendo_bgm_vol') || '0.15');
+const BGM_MAX_VOLUME = 0.25;
+let bgmVolume = Math.min(BGM_MAX_VOLUME, parseFloat(localStorage.getItem('loquendo_bgm_vol') || '0.08'));
 let bgmFadeTimer = null;
 
 // Variables de Estado
@@ -193,14 +194,16 @@ document.addEventListener('click', unlockAudioSession, { passive: true });
 // ============================================================================
 // 1.1 GESTIÓN DE MÚSICA DE FONDO LOQUENDO
 // ============================================================================
-function startLoquendoBgm() {
+function startLoquendoBgm(restart = false) {
   if (!loquendoBgm || !isBgmEnabled) return;
   if (bgmFadeTimer) {
     clearInterval(bgmFadeTimer);
     bgmFadeTimer = null;
   }
   loquendoBgm.volume = bgmVolume;
-  loquendoBgm.currentTime = 0;
+  if (restart || loquendoBgm.ended) {
+    loquendoBgm.currentTime = 0;
+  }
   const playPromise = loquendoBgm.play();
   if (playPromise !== undefined) {
     playPromise.catch(err => {
@@ -889,6 +892,12 @@ async function playVoiceResponse(audioUrl, audioBase64, responseText) {
   };
 }
 
+if (audioPlayer) {
+  audioPlayer.addEventListener('pause', () => {
+    if (!audioPlayer.ended) stopLoquendoBgm(true);
+  });
+}
+
 function finishPlayback() {
   document.body.classList.remove('speaking');
   stopLoquendoBgm(true);
@@ -1109,18 +1118,20 @@ document.querySelectorAll('.chip').forEach(chip => {
   });
 });
 
-btnToggleLight.addEventListener('click', () => {
-  triggerHaptic(30);
-  const newLight = lightState === 1 ? 0 : 1;
-  updateLightState(newLight);
+if (btnToggleLight) {
+  btnToggleLight.addEventListener('click', () => {
+    triggerHaptic(30);
+    const newLight = lightState === 1 ? 0 : 1;
+    updateLightState(newLight);
 
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      event: 'manual_move',
-      light: newLight
-    }));
-  }
-});
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        event: 'manual_move',
+        light: newLight
+      }));
+    }
+  });
+}
 
 btnToggleManual.addEventListener('click', () => {
   manualPanel.classList.toggle('open');
@@ -1215,7 +1226,11 @@ if (btnToggleBgm) {
     isBgmEnabled = !isBgmEnabled;
     localStorage.setItem('loquendo_bgm_enabled', isBgmEnabled);
     updateBgmUI();
-    if (!isBgmEnabled) stopLoquendoBgm(false);
+    if (!isBgmEnabled) {
+      stopLoquendoBgm(false);
+    } else if (document.body.classList.contains('speaking')) {
+      startLoquendoBgm();
+    }
   });
 }
 

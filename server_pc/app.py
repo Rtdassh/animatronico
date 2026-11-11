@@ -619,6 +619,13 @@ async def serve_audio(filename: str):
         if not file_path.exists() and (STATIC_DIR / "audio" / safe_name).exists():
             file_path = STATIC_DIR / "audio" / safe_name
 
+    # Fallback de compatibilidad para musica_loquendo entre .mp4 y .m4a
+    if not file_path.exists():
+        if safe_name == "musica_loquendo.mp4" and (STATIC_DIR / "musica_loquendo.m4a").exists():
+            file_path = STATIC_DIR / "musica_loquendo.m4a"
+        elif safe_name == "musica_loquendo.m4a" and (STATIC_DIR / "musica_loquendo.mp4").exists():
+            file_path = STATIC_DIR / "musica_loquendo.mp4"
+
     if file_path.exists():
         if safe_name.endswith(".wav"):
             media_type = "audio/wav"

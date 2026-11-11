@@ -5,9 +5,13 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
-from local_speech import speech_status, transcribe
+from stt_engine import speech_status, transcribe
 
 def create_router(bridge_getter):
+    from stt_engine import engine_order
+    if 'whisper' in engine_order():
+        import whisper_local
+        whisper_local.preload_in_background()
     router = APIRouter()
 
     @router.get('/setup')
@@ -45,7 +49,8 @@ def create_router(bridge_getter):
     async def transcribe_mobile(audio: UploadFile = File(...)):
         content = await audio.read(2_000_001)
         try:
-            return {'text': await asyncio.to_thread(transcribe, content), 'local': True}
+            text, engine = await asyncio.to_thread(transcribe, content)
+            return {'text': text, 'engine': engine, 'local': engine == 'vosk'}
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         except RuntimeError as exc:

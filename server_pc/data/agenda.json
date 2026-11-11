@@ -19,5 +19,12 @@
     "date": "2026-11-09",
     "time": "15:30",
     "category": "misión"
+  },
+  {
+    "id": "item_e1cdeb",
+    "title": "Tarea",
+    "date": "Mañana",
+    "time": "16:00",
+    "category": "general"
   }
 ]

@@ -13,3 +13,4 @@ numpy>=1.26.0
 pyserial>=3.5
 cryptography>=43.0
 vosk>=0.3.45
+pillow>=10.0.0

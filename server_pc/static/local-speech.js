@@ -1,4 +1,4 @@
-/* SpeechRecognition compatible con el modo manos libres; audio solo al PC local. */
+/* SpeechRecognition compatible con el modo manos libres; el audio va al PC, que elige el motor (Whisper, Google o Vosk). */
 class LocalSpeechRecognition {
   constructor() {
     this.continuous = true;
@@ -75,7 +75,7 @@ class LocalSpeechRecognition {
       form.append('audio', exportWAV(merged, this.context.sampleRate), 'frase.wav');
       const response = await fetch('/api/transcribe', {method: 'POST', body: form});
       const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'Error de reconocimiento local');
+      if (!response.ok) throw new Error(data.detail || 'Error de reconocimiento de voz');
       if (this.running && generation === this.generation && data.text) {
         const result = [{transcript: data.text, confidence: 1}];
         result.isFinal = true;
